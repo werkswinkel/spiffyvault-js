@@ -26,7 +26,7 @@ import type { FundedPayment, PaymentOutput } from '../funding.ts'
 import { SPIFFYVAULT_RICOCHET, canonicalNetwork, walletNetworkType } from '../networks.ts'
 import type { Network } from '../networks.ts'
 import type { FundingContext, PaymentProgress, PaymentResult } from '../types.ts'
-import { encodeOnFrame, readOnFrame } from './frame.ts'
+import { encodeOnFrame, openFrameReader, readOnFrame } from './frame.ts'
 
 export const PAYMENT_PROTOCOL = '/overnode/payment/1.0.0'
 /** What a payer that pays invoices in parts says in `caps` (invoice_parts.dart). */
@@ -53,6 +53,11 @@ export interface LiveTimeouts {
   sessionMs?: number
   /** Give up building when less than this is left of the session. Default 10 000. */
   marginMs?: number
+  /**
+   * For the payee's payment_network after it answered before the network
+   * did (final: false). Default 60 000; after it the payment is "sent".
+   */
+  networkMs?: number
 }
 
 export interface LivePayContext extends FundingContext {
@@ -190,7 +195,7 @@ export async function payLive (params: LivePayParams, ctx: LivePayContext): Prom
     throw err('amount-invalid', 'The amount must be a whole number of satoshis, at least 1', 'prepare', true)
   }
   if (ctx.wallet === undefined && ctx.funder === undefined) throw err('no-route', 'Live payments need a wallet or a funder', 'prepare', true)
-  const t = { dialMs: 30_000, readMs: 30_000, sessionMs: 60_000, marginMs: 10_000, ...ctx.timeouts }
+  const t = { dialMs: 30_000, readMs: 30_000, sessionMs: 60_000, marginMs: 10_000, networkMs: 60_000, ...ctx.timeouts }
   const maxFrame = ctx.maxFrameBytes ?? DEFAULT_MAX_FRAME_BYTES
   const sessionId = ctx.sessionId ?? newSessionId()
   const requestId = ctx.requestId ?? `req_${Date.now()}_${toHex(randomBytes(4))}`
@@ -269,18 +274,40 @@ export async function payLive (params: LivePayParams, ctx: LivePayContext): Prom
   } catch (e) {
     return await giveUp('payee-unreachable', `The payee could not be reached again to hand over the payment: ${errorText(e)}`, 'connect', e)
   }
+  const within = (ms: number): AbortSignal => {
+    const timeout = AbortSignal.timeout(ms)
+    return ctx.signal !== undefined ? AbortSignal.any([ctx.signal, timeout]) : timeout
+  }
+  const reader = openFrameReader(b)
   let status: Record<string, unknown>
+  let outcome: Record<string, unknown> | undefined
   try {
-    const timeout = AbortSignal.timeout(t.readMs)
-    const reply = readOnFrame(b, ctx.signal !== undefined ? AbortSignal.any([ctx.signal, timeout]) : timeout)
-    reply.catch(() => {})
-    if (!b.send(frame)) await b.onDrain()
-    progress('status')
-    status = (await reply).payload
-  } catch (e) {
-    throw err('not-confirmed', `Payment ${funded.txid} was handed to the payee, but no answer came: the payee may hold it. Do not pay again; watch the txid.`,
-      'settle', false, { txid: funded.txid, cause: e })
+    try {
+      const reply = reader.next(within(t.readMs))
+      reply.catch(() => {})
+      if (!b.send(frame)) await b.onDrain()
+      progress('status')
+      status = (await reply).payload
+    } catch (e) {
+      throw err('not-confirmed', `Payment ${funded.txid} was handed to the payee, but no answer came: the payee may hold it. Do not pay again; watch the txid.`,
+        'settle', false, { txid: funded.txid, cause: e })
+    }
+    // The payee took it and ARC is taking it to the network; its answer
+    // follows on this stream (spiffyvault-voo).
+    if (status.type === 'payment_status' && status.success === true && status.final === false && reachedNetwork(status)) {
+      progress('network', funded.txid)
+      try {
+        outcome = (await reader.next(within(t.networkMs))).payload
+        if (outcome.type === 'payment_network') {
+          const ack = encodeOnFrame({ type: 'ack', sessionId })
+          if (!b.send(ack)) await b.onDrain()
+        }
+      } catch {
+        outcome = undefined // no answer in time: the payment stays "sent"
+      }
+    }
   } finally {
+    reader.close()
     await closeQuietly(b)
   }
   if (status.type !== 'payment_status') {
@@ -297,10 +324,18 @@ export async function payLive (params: LivePayParams, ctx: LivePayContext): Prom
     throw err('not-confirmed', `The payee checked payment ${funded.txid} but could not put it on the network (${why}). Do not pay again; watch the txid.`,
       'settle', false, { txid: funded.txid })
   }
+  if (status.final === false) {
+    if (outcome?.type === 'payment_network' && outcome.onNetwork !== true) {
+      const why = String(outcome.error ?? outcome.networkStatus ?? 'no reason given')
+      throw err('network-refused', `The payee took payment ${funded.txid}, then the network refused it (${why}): the payee was not paid. Its inputs stay reserved; release them once the txid is not on the network.`,
+        'settle', false, { txid: funded.txid })
+    }
+  }
+  const confirmed = status.final !== false || (outcome?.type === 'payment_network' && outcome.onNetwork === true)
   return {
     path: 'live',
     txid: funded.txid,
-    status: 'completed',
+    status: confirmed ? 'completed' : 'sent',
     amountSats: params.amountSats,
     ...(note !== '' ? { note } : {}),
     broadcasted: status.broadcasted === true,

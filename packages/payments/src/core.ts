@@ -68,7 +68,8 @@ export {
   payLive, dialPayee, circuitAddress, newSessionId, checkInvoice, invoiceOutputs, PAYMENT_PROTOCOL, SPLIT_CAPABILITY, DEFAULT_MAX_FRAME_BYTES
 } from './live/live.ts'
 export type { LivePayParams, LivePayContext, LiveTimeouts } from './live/live.ts'
-export { encodeOnFrame, decodeOnFrame, readOnFrame, frameLength, FrameError, FRAME_HEADER, PAYMENT_PROTOCOL_ID } from './live/frame.ts'
+export { encodeOnFrame, decodeOnFrame, readOnFrame, openFrameReader, frameLength, FrameError, FRAME_HEADER, PAYMENT_PROTOCOL_ID } from './live/frame.ts'
+export type { FrameReader } from './live/frame.ts'
 export type { ReadFrameResult } from './live/frame.ts'
 
 export { pay, planPayment } from './pay.ts'

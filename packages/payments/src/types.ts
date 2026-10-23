@@ -7,6 +7,11 @@ import type { Funder } from './funding.ts'
 export type PaymentStatus =
   /** Live: the payee checked the transaction by SPV and put it on the network. */
   | 'completed'
+  /**
+   * Live: the payee checked it and ARC accepted it, but the network had not
+   * answered within `timeouts.networkMs`. Do not pay again; watch the txid.
+   */
+  | 'sent'
   /** Offline: sealed and in the payee's Ricochet mailbox; the payee broadcasts when it collects. */
   | 'handed-off'
   /** PeerPay: broadcast by the payer's wallet and the token left in the payee's message box. */
@@ -33,7 +38,7 @@ export interface PaymentResult {
 
 export interface PaymentProgress {
   path: PaymentPath
-  step: 'anchor' | 'prekeys' | 'derive' | 'fund' | 'seal' | 'submit' | 'dial' | 'request' | 'invoice' | 'send' | 'status'
+  step: 'anchor' | 'prekeys' | 'derive' | 'fund' | 'seal' | 'submit' | 'dial' | 'request' | 'invoice' | 'send' | 'status' | 'network'
     | 'key' | 'deliver' | 'abort' | 'fallback'
   detail?: string
 }

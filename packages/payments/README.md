@@ -113,7 +113,8 @@ The result names the path, the txid and the status:
 
 | Status | Path | Meaning |
 |---|---|---|
-| `completed` | live | The phone checked the payment by SPV and took it. It broadcasts it. |
+| `completed` | live | The phone checked the payment by SPV and the network holds it. |
+| `sent` | live | The phone checked it and ARC accepted it, but the network had not answered within `timeouts.networkMs` (default 60 s). Do not pay again; watch the txid. |
 | `handed-off` | offline | The sealed payment is in the payee's mailbox. The phone broadcasts it when it collects it. |
 | `delivered` | peerpay | Your wallet broadcast it and the token is in the payee's message box. |
 
@@ -238,6 +239,7 @@ try {
 | `mailbox-refused` | deliver | The mailbox refused it; aborted. |
 | `delivery-unknown` | deliver | The submission's answer was lost. It may be in the mailbox: inputs stay reserved. |
 | `not-confirmed`, `payee-refused` | settle | Handed to the phone; no good answer. Inputs stay reserved. Release them only once the txid is not on the network. |
+| `network-refused` | settle | The phone took it, then the network refused it (for example a double spend): the payee was not paid. Inputs stay reserved until the txid is known not to be on the network. |
 | `broadcast-failed`, `peerpay-undelivered` | pay, deliver | PeerPay: the broadcast failed, or the token was not delivered after it. `PeerPayUndeliveredError` keeps the token for `deliverPeerPayToken()`. |
 
 ## What the library does, and does not do

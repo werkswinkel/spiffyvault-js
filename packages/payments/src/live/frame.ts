@@ -62,9 +62,42 @@ export interface ReadFrameResult {
  * the Dart reader). Rejects on EOF, a bad header, or `signal`.
  */
 export async function readOnFrame (source: AsyncIterable<Chunk>, signal?: AbortSignal): Promise<ReadFrameResult> {
+  const reader = openFrameReader(source)
+  try {
+    return await reader.next(signal)
+  } finally {
+    reader.close()
+  }
+}
+
+/** Reads successive ON frames from one stream; [close] ends the reading. */
+export interface FrameReader {
+  next: (signal?: AbortSignal) => Promise<ReadFrameResult>
+  close: () => void
+}
+
+/**
+ * A reader of successive ON frames from [source]: bytes past one frame are
+ * kept for the next. For a stream that carries more than one reply, such
+ * as a payee's payment_status and then its payment_network
+ * (spiffyvault-voo).
+ */
+export function openFrameReader (source: AsyncIterable<Chunk>): FrameReader {
   const it = source[Symbol.asyncIterator]()
-  const parts: Uint8Array[] = []
-  let have = 0
+  let rest: Uint8Array = new Uint8Array(0)
+  return {
+    next: async (signal) => {
+      const result = await readFrom(it, rest, signal)
+      rest = result.rest
+      return { payload: result.payload, chunks: result.chunks }
+    },
+    close: () => { void it.return?.() }
+  }
+}
+
+async function readFrom (it: AsyncIterator<Chunk>, carried: Uint8Array, signal?: AbortSignal): Promise<ReadFrameResult & { rest: Uint8Array }> {
+  const parts: Uint8Array[] = carried.length > 0 ? [carried] : []
+  let have = carried.length
   let need = -1
   let chunks = 0
   const aborted = signal === undefined
@@ -74,20 +107,24 @@ export async function readOnFrame (source: AsyncIterable<Chunk>, signal?: AbortS
       if (signal.aborted) fail(); else signal.addEventListener('abort', fail, { once: true })
     })
   aborted?.catch(() => {})
-  try {
-    for (;;) {
-      const next = aborted === undefined ? await it.next() : await Promise.race([it.next(), aborted])
-      if (next.done === true) throw new FrameError(have === 0 ? 'stream ended before a frame arrived' : 'stream ended inside a frame')
-      const bytes = next.value instanceof Uint8Array ? next.value : next.value.subarray()
-      if (bytes.length === 0) continue
-      parts.push(bytes)
-      have += bytes.length
-      chunks++
-      const all = (): Uint8Array => { const b = new Uint8Array(have); let o = 0; for (const p of parts) { b.set(p, o); o += p.length } return b }
-      if (need < 0 && have >= FRAME_HEADER) need = FRAME_HEADER + frameLength(all().subarray(0, FRAME_HEADER))
-      if (need >= 0 && have >= need) return { payload: decodeOnFrame(all().subarray(0, need)), chunks }
-    }
-  } finally {
-    void it.return?.()
+  const all = (): Uint8Array => { const b = new Uint8Array(have); let o = 0; for (const p of parts) { b.set(p, o); o += p.length } return b }
+  const done = (): (ReadFrameResult & { rest: Uint8Array }) | undefined => {
+    if (need < 0 && have >= FRAME_HEADER) need = FRAME_HEADER + frameLength(all().subarray(0, FRAME_HEADER))
+    if (need < 0 || have < need) return undefined
+    const bytes = all()
+    return { payload: decodeOnFrame(bytes.subarray(0, need)), chunks, rest: bytes.slice(need) }
+  }
+  const early = done()
+  if (early !== undefined) return early
+  for (;;) {
+    const next = aborted === undefined ? await it.next() : await Promise.race([it.next(), aborted])
+    if (next.done === true) throw new FrameError(have === 0 ? 'stream ended before a frame arrived' : 'stream ended inside a frame')
+    const bytes = next.value instanceof Uint8Array ? next.value : next.value.subarray()
+    if (bytes.length === 0) continue
+    parts.push(bytes)
+    have += bytes.length
+    chunks++
+    const result = done()
+    if (result !== undefined) return result
   }
 }

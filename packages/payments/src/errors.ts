@@ -28,7 +28,7 @@ export type PaymentErrorCode =
   | 'anchor-missing' | 'anchor-invalid' | 'anchor-other-network'
   | 'prekeys-missing' | 'prekeys-not-public' | 'prekeys-invalid'
   | 'funding-failed' | 'beef-unusable' | 'broadcast-failed'
-  | 'mailbox-refused' | 'delivery-unknown' | 'not-confirmed' | 'payee-refused'
+  | 'mailbox-refused' | 'delivery-unknown' | 'not-confirmed' | 'payee-refused' | 'network-refused'
   | 'peerpay-undelivered' | 'aborted'
 
 export interface PaymentErrorOptions {

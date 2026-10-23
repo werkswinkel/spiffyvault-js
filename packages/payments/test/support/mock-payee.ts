@@ -17,7 +17,7 @@
 
 import { P2PKH, PrivateKey, Transaction } from '@bsv/sdk'
 import type { Connection, Libp2p, Stream } from '@libp2p/interface'
-import { PAYMENT_PROTOCOL, encodeOnFrame, readOnFrame, inspectBeefV1, fromBase64 } from './internals.ts'
+import { PAYMENT_PROTOCOL, encodeOnFrame, openFrameReader, inspectBeefV1, fromBase64 } from './internals.ts'
 
 export interface MockPayeeOptions {
   network?: 'test' | 'main'
@@ -33,6 +33,8 @@ export interface MockPayeeOptions {
   refuse?: string
   /** The payment_status fields after success:true (default: broadcast). */
   status?: Record<string, unknown>
+  /** With status final:false: the payment_network fields sent after it on the same stream. */
+  networkAnswer?: Record<string, unknown>
   sessionMs?: number
 }
 
@@ -50,6 +52,8 @@ export class MockPayee {
   readonly received: Received[] = []
   readonly sessions = new Map<string, Session>()
   readonly paid: Array<{ txid: string, sats: number, tx: Transaction }> = []
+  /** The payer's acknowledgements of payment_network. */
+  readonly acks: Array<Record<string, unknown>> = []
   private readonly opts: MockPayeeOptions
   private readonly node: Pick<Libp2p, 'handle' | 'unhandle'>
 
@@ -74,17 +78,26 @@ export class MockPayee {
   }
 
   private async onStream (stream: Stream, connection: Connection): Promise<void> {
+    const reader = openFrameReader(stream)
     try {
-      const { payload, chunks } = await readOnFrame(stream, AbortSignal.timeout(30_000))
+      const { payload, chunks } = await reader.next(AbortSignal.timeout(30_000))
       this.received.push({ type: String(payload.type), frame: payload, chunks, remotePeer: connection.remotePeer.toString(), limited: connection.limits !== undefined })
       const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : `pay_${Date.now()}`
       const session = this.sessions.get(sessionId) ?? { state: 'idle', amount: 0, addresses: [], invoiceId: '' }
       this.touch(sessionId, session)
       const reply = this.handle(session, payload)
       if (reply !== undefined) stream.send(encodeOnFrame({ ...reply, sessionId }))
+      if (reply?.final === false && this.opts.networkAnswer !== undefined) {
+        // The network's answer, then the payer's ack (spiffyvault-voo).
+        await new Promise(resolve => setTimeout(resolve, 50))
+        stream.send(encodeOnFrame({ type: 'payment_network', sessionId, txid: reply.txid, ...this.opts.networkAnswer }))
+        this.acks.push((await reader.next(AbortSignal.timeout(10_000))).payload)
+      }
       await stream.close()
     } catch {
       stream.abort(new Error('payee error'))
+    } finally {
+      reader.close()
     }
   }
 

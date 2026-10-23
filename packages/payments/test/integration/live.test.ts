@@ -28,6 +28,13 @@ after(async () => {
 })
 
 const asWallet = (w: FakeWallet): WalletInterface => w as unknown as WalletInterface
+async function waitFor (ok: () => boolean, what: string, ms = 5000): Promise<void> {
+  const until = Date.now() + ms
+  while (!ok()) {
+    if (Date.now() > until) throw new Error(`timed out waiting for ${what}`)
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}
 async function payee (opts: Parameters<typeof relayedPayee>[1] = {}): Promise<RelayedPayee> {
   const p = await relayedPayee(server.udx, opts)
   payees.push(p)
@@ -115,6 +122,34 @@ test('a payee that could not put the payment on the network has not been paid (s
     assert.equal(e.stage, 'settle')
     assert.equal(e.canPayAnotherWay, false)
   }
+})
+
+test('voo: an early status, then payment_network on the network: completed, and acknowledged', async () => {
+  const p = await payee({ status: { broadcasted: true, arcStatus: 'broadcasting', networkStatus: 'RECEIVED', final: false },
+    networkAnswer: { onNetwork: true, networkStatus: 'SEEN_ON_NETWORK' } })
+  const steps: string[] = []
+  const r = await payLive({ payeePeerId: p.peerId, amountSats: 10, network: 'testnet' },
+    { wallet: asWallet(new FakeWallet()), libp2p: payer, relays: [server.udx], onProgress: s => steps.push(s.step) })
+  assert.equal(r.status, 'completed')
+  assert.ok(steps.includes('network'))
+  await waitFor(() => p.payee.acks.length === 1, 'the ack')
+})
+
+test('voo: an early status, then the network refuses it: network-refused at settle', async () => {
+  const p = await payee({ status: { broadcasted: true, arcStatus: 'broadcasting', networkStatus: 'RECEIVED', final: false },
+    networkAnswer: { onNetwork: false, networkStatus: 'REJECTED', error: 'double spend' } })
+  const e = await payLive({ payeePeerId: p.peerId, amountSats: 10, network: 'testnet' },
+    { wallet: asWallet(new FakeWallet()), libp2p: payer, relays: [server.udx] }).catch(x => x)
+  assert.equal(e.code, 'network-refused')
+  assert.equal(e.stage, 'settle')
+  assert.equal(e.canPayAnotherWay, false)
+})
+
+test('voo: an early status and no network answer in time: sent', async () => {
+  const p = await payee({ status: { broadcasted: true, arcStatus: 'broadcasting', networkStatus: 'RECEIVED', final: false } })
+  const r = await payLive({ payeePeerId: p.peerId, amountSats: 10, network: 'testnet' },
+    { wallet: asWallet(new FakeWallet()), libp2p: payer, relays: [server.udx], timeouts: { networkMs: 500 } })
+  assert.equal(r.status, 'sent')
 })
 
 test('a payment ARC reports mined counts as made, broadcast or not', async () => {
