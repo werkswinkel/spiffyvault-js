@@ -1,0 +1,92 @@
+{
+  "name": "@spiffyvault/payments",
+  "version": "0.1.0",
+  "description": "Pay a SpiffyVault user from a web app, a JS or Electron wallet, or a Node service: PeerPay, offline (Ricochet mailbox) and live (libp2p) payments, byte-compatible with the SpiffyVault app.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
+      "node": {
+        "types": "./dist/node.d.ts",
+        "default": "./dist/node.js"
+      },
+      "default": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./core": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/index.js",
+    "./dist/browser.js",
+    "./dist/node.js",
+    "./src/index.ts",
+    "./src/browser.ts",
+    "./src/node.ts"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json && npm run build && tsc -p tsconfig.test.json",
+    "test": "npm run test:unit",
+    "test:unit": "node --test 'test/unit/**/*.test.ts'",
+    "test:integration": "npm run build && node --test --test-concurrency=1 'test/integration/**/*.test.ts'",
+    "test:browser": "npm run build && node test/browser/build.ts && node --test --test-concurrency=1 'test/browser/**/*.test.ts'",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:browser && npm run check:bundle",
+    "check:bundle": "npm run build && node test/bundle-check.ts",
+    "readme": "node tools/sync-readme.ts",
+    "e2e": "node tools/e2e-pay.ts"
+  },
+  "dependencies": {
+    "@bsv/message-box-client": "2.6.0",
+    "@bsv/sdk": "3.2.1",
+    "@chainsafe/libp2p-noise": "17.0.0",
+    "@chainsafe/libp2p-yamux": "8.0.1",
+    "@libp2p/circuit-relay-v2": "4.2.17",
+    "@libp2p/crypto": "5.2.0",
+    "@libp2p/identify": "4.1.18",
+    "@libp2p/interface": "3.4.0",
+    "@libp2p/peer-id": "6.0.18",
+    "@libp2p/ping": "3.1.17",
+    "@libp2p/websockets": "10.1.25",
+    "@multiformats/multiaddr": "13.0.3",
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@stephanfeb/libp2p-udx": "0.1.1",
+    "@stephanfeb/ricochet": "file:../../../ricochet-js/packages/ricochet",
+    "libp2p": "3.5.1"
+  },
+  "devDependencies": {
+    "@bsv/wallet-toolbox": "2.14.9",
+    "@types/node": "22.20.4",
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "typescript": "5.9.3"
+  }
+}

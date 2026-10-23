@@ -1,0 +1,16 @@
+{
+  "name": "spiffyvault-js",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm test --workspaces"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}
