@@ -154,6 +154,10 @@ export async function startServer (): Promise<TestServer> {
     'features:',
     '  enable_relay: true',
     '  enable_relay_service: true',
+    // Every test peer is on 127.0.0.1: lift the per-IP reservation cap (default 8).
+    'relay_limits:',
+    '  max_reservations_per_ip: 256',
+    '  max_reservations_per_peer: 16',
     'storage:',
     `  data_directory: ${join(dir, 'data')}`,
     'database:',
