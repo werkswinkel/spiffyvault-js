@@ -20,6 +20,7 @@ import { relayedPayee } from '../integration/live-peers.ts'
 import type { RelayedPayee } from '../integration/live-peers.ts'
 import { newPayeeIdentity, publishPayee } from '../integration/payee-publish.ts'
 import { collectOfflinePayment } from '../support/offline-payee.ts'
+import { formatPaymentLink } from '../../src/node.ts'
 import { openPage } from './harness.ts'
 import type { BrowserSession } from './harness.ts'
 
@@ -82,4 +83,14 @@ test('Chrome over WSS: an offline payment the payee collects', async (t) => {
   assert.equal(c.txid, r.txid)
   assert.equal(c.paidSats, 888)
   void RicochetClient
+})
+
+test('README browser example runs in Chrome (live through the relay)', async (t) => {
+  if (server.wss === undefined) { t.skip('no certificate (openssl missing)'); return }
+  const p = await relayedPayee(server.udx)
+  payees.push(p)
+  const link = formatPaymentLink({ network: 'testnet', peerId: p.peerId, amountSats: 321 })
+  const r = await session.page.evaluate(async (a) => await window.exampleFlow(a), { link, peerId: server.peerId, wss: server.wss })
+  assert.equal(r.path, 'live')
+  assert.equal(p.payee.paid[0]!.txid, r.txid)
 })

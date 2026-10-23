@@ -7,6 +7,7 @@ import { RicochetClient } from '@stephanfeb/ricochet/core'
 import type { WalletInterface } from '@bsv/sdk'
 import { createPaymentNode, payLive, payOffline, isPaymentError } from '../../src/browser.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
+import { browserPay } from '../../examples/browser.ts'
 
 export interface FlowOutcome {
   ok: boolean
@@ -60,13 +61,20 @@ async function offlineFlow (a: { serverPeerId: string, addr: string, payeePeerId
   }
 }
 
+/** The README browser example, with a stand-in wallet. */
+async function exampleFlow (a: { link: string, peerId: string, wss: string }): Promise<{ path: string, txid: string }> {
+  return await browserPay(a.link, new FakeWallet() as unknown as WalletInterface, { peerId: a.peerId, wss: a.wss }, { allowPrivateAddresses: true })
+}
+
 declare global {
   interface Window {
     liveFlow: typeof liveFlow
     offlineFlow: typeof offlineFlow
+    exampleFlow: typeof exampleFlow
   }
 }
 
 window.liveFlow = liveFlow
 window.offlineFlow = offlineFlow
+window.exampleFlow = exampleFlow
 document.title = 'ready'
