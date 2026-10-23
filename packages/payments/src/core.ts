@@ -70,3 +70,6 @@ export {
 export type { LivePayParams, LivePayContext, LiveTimeouts } from './live/live.ts'
 export { encodeOnFrame, decodeOnFrame, readOnFrame, frameLength, FrameError, FRAME_HEADER, PAYMENT_PROTOCOL_ID } from './live/frame.ts'
 export type { ReadFrameResult } from './live/frame.ts'
+
+export { pay, planPayment } from './pay.ts'
+export type { PayRequest, PayContext, PayPlan } from './pay.ts'
