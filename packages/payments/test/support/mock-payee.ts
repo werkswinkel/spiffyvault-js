@@ -31,6 +31,8 @@ export interface MockPayeeOptions {
   silentOnBeef?: boolean
   /** Answer beef_payment with success:false. */
   refuse?: string
+  /** The payment_status fields after success:true (default: broadcast). */
+  status?: Record<string, unknown>
   sessionMs?: number
 }
 
@@ -119,7 +121,7 @@ export class MockPayee {
         const sats = tx.outputs.filter(o => scripts.has(o.lockingScript.toHex())).reduce((t, o) => t + (o.satoshis ?? 0), 0)
         if (sats < s.amount) return { type: 'payment_status', success: false, error: `pays ${sats} of ${s.amount}` }
         this.paid.push({ txid: info.txid, sats, tx })
-        return { type: 'payment_status', success: true, txid: m.txid, broadcasted: false, arcStatus: 'validated_only' }
+        return { type: 'payment_status', success: true, txid: m.txid, ...(this.opts.status ?? { broadcasted: true, arcStatus: 'broadcasting' }) }
       } catch (e) {
         return { type: 'payment_status', success: false, error: e instanceof Error ? e.message : String(e) }
       }

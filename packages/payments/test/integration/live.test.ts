@@ -41,7 +41,7 @@ test('UDX↔relay↔UDX: request, invoice, BEEF, status; frames in one chunk, on
     { wallet: asWallet(wallet), libp2p: payer, relays: [server.udx] })
   assert.equal(r.status, 'completed')
   assert.equal(r.path, 'live')
-  assert.equal(r.broadcasted, false)
+  assert.equal(r.broadcasted, true)
   assert.deepEqual(p.payee.paid.map(x => [x.txid, x.sats]), [[r.txid, 3000]])
   const [req, beef] = p.payee.received
   assert.equal(req!.type, 'payment_request')
@@ -101,6 +101,27 @@ test('no status after the BEEF went out: the payee may hold it; the inputs stay 
   assert.equal(e.stage, 'settle')
   assert.equal(e.canPayAnotherWay, false)
   assert.equal(wallet.actions.get(e.txid)!.status, 'nosend')
+})
+
+test('a payee that could not put the payment on the network has not been paid (spiffyvault-qzj)', async () => {
+  for (const status of [
+    { broadcasted: false, arcStatus: 'validated_only', networkStatus: 'REJECTED', broadcastError: 'double spend' },
+    { broadcasted: false, arcStatus: 'validated_only' }
+  ]) {
+    const p = await payee({ status })
+    const wallet = new FakeWallet()
+    const e = await payLive({ payeePeerId: p.peerId, amountSats: 10, network: 'testnet' }, { wallet: asWallet(wallet), libp2p: payer, relays: [server.udx] }).catch(x => x)
+    assert.equal(e.code, 'not-confirmed')
+    assert.equal(e.stage, 'settle')
+    assert.equal(e.canPayAnotherWay, false)
+  }
+})
+
+test('a payment ARC reports mined counts as made, broadcast or not', async () => {
+  const p = await payee({ status: { broadcasted: false, arcStatus: 'validated_only', networkStatus: 'MINED' } })
+  const r = await payLive({ payeePeerId: p.peerId, amountSats: 10, network: 'testnet' }, { wallet: asWallet(new FakeWallet()), libp2p: payer, relays: [server.udx] })
+  assert.equal(r.status, 'completed')
+  assert.equal(r.broadcasted, false)
 })
 
 test('a refusal keeps the inputs reserved and says so', async () => {

@@ -5,7 +5,7 @@ import type { PaymentError, PaymentPath } from './errors.ts'
 import type { Funder } from './funding.ts'
 
 export type PaymentStatus =
-  /** Live: the payee checked the transaction by SPV and took it (it broadcasts). */
+  /** Live: the payee checked the transaction by SPV and put it on the network. */
   | 'completed'
   /** Offline: sealed and in the payee's Ricochet mailbox; the payee broadcasts when it collects. */
   | 'handed-off'
@@ -19,7 +19,7 @@ export interface PaymentResult {
   amountSats: number
   /** The note sent with the payment (with `ref <r>` when the link has a request reference). */
   note?: string
-  /** Live: whether the payee says it broadcast the transaction (`arcStatus` "broadcasting"). */
+  /** Live: whether the payee says it broadcast the transaction (`arcStatus` "broadcasting"); false when ARC reports it mined or seen instead. */
   broadcasted?: boolean
   /** Offline: the OfflinePaymentMessage paymentId; the payee de-duplicates by it. */
   paymentId?: string

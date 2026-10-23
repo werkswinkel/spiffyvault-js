@@ -290,6 +290,13 @@ export async function payLive (params: LivePayParams, ctx: LivePayContext): Prom
     throw err('payee-refused', `The payee refused payment ${funded.txid}: ${String(status.error ?? '')}. Its inputs stay reserved; release them once the txid is not on the network.`,
       'settle', false, { txid: funded.txid })
   }
+  if (!reachedNetwork(status)) {
+    // The payee holds a valid payment but could not put it on the network
+    // (ARC refused it, or could not be asked): not a payment made.
+    const why = String(status.broadcastError ?? status.networkStatus ?? status.arcStatus ?? 'no broadcast')
+    throw err('not-confirmed', `The payee checked payment ${funded.txid} but could not put it on the network (${why}). Do not pay again; watch the txid.`,
+      'settle', false, { txid: funded.txid })
+  }
   return {
     path: 'live',
     txid: funded.txid,
@@ -299,4 +306,15 @@ export async function payLive (params: LivePayParams, ctx: LivePayContext): Prom
     broadcasted: status.broadcasted === true,
     attempts: []
   }
+}
+
+/**
+ * Whether a successful payment_status says the payment reached the network:
+ * the payee submitted it (`broadcasted`, or `arcStatus` "broadcasting"), or
+ * ARC reports it on the network or mined. "validated_only" alone is a
+ * payment the payee could not put on the network.
+ */
+export function reachedNetwork (status: Record<string, unknown>): boolean {
+  if (status.broadcasted === true || status.arcStatus === 'broadcasting') return true
+  return ['SEEN_ON_NETWORK', 'SEEN_MULTIPLE_NODES', 'MINED'].includes(String(status.networkStatus))
 }

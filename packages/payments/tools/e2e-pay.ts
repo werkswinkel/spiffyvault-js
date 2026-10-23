@@ -188,7 +188,7 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
       { ...ctx, network: 'testnet', libp2p: node, relays, ricochet, peerPay: { ...(host !== undefined ? { host } : {}), fallback: o['peerpay-fallback'] === true } })
     say(`3. done: ${r.status} by ${r.path}; txid ${r.txid}`)
     for (const a of r.attempts) say(`   earlier attempt: ${a.path ?? '?'} ${a.code}: ${a.message}`)
-    if (r.path === 'live') say(`   the phone checked it by SPV${r.broadcasted === true ? ' and is broadcasting it' : ' (it did not say it broadcast)'}`)
+    if (r.path === 'live') say(`   the phone checked it by SPV${r.broadcasted === true ? ' and is broadcasting it' : ' (the network already holds it)'}`)
     if (r.path === 'offline') say('   it waits in the phone\'s mailbox; the phone broadcasts it when it collects (open the app; it pulls every 30 s)')
     if (r.path === 'peerpay') say('   broadcast by this wallet; the phone imports the token from its message box (it polls every 30 s)')
     say(`   follow it: node tools/e2e-pay.ts status ${r.txid}`)
