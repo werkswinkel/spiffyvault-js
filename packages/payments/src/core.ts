@@ -40,3 +40,26 @@ export type { PeerPayParams, PeerPayContext, PeerPayToken, MessageBoxSender } fr
 export { ed25519KeyOfPeerId, isPeerId } from './peer.ts'
 export type { RicochetLike } from './ricochet.ts'
 export { toHex, fromHex, toBase64, fromBase64, utf8, fromUtf8 } from './bytes.ts'
+
+export {
+  anchorContextHex, anchorSignaturePayload, parseAnchorRecord, anchorRecordJson, verifyAnchorRecord, anchorPaths, fetchAnchor,
+  ANCHOR_RECORD_VERSION
+} from './anchor.ts'
+export type { AnchorRecord, AnchorLookup, FetchedAnchor } from './anchor.ts'
+
+export {
+  parsePrekeyBundle, prekeyBundleJson, bundleCanonicalBytes, verifyPrekeyBundle, fetchPrekeyBundle
+} from './signal/bundle.ts'
+export type { PrekeyBundle, OneTimePreKey } from './signal/bundle.ts'
+export { sealFirstMessage } from './signal/seal.ts'
+export type { SealOptions, Sealed } from './signal/seal.ts'
+export {
+  encodeSignalMessage, decodeSignalMessage, encodePreKeySignalMessage, decodePreKeySignalMessage, parsesAsSignalMessage
+} from './signal/messages.ts'
+export type { SignalMessage, PreKeySignalMessage } from './signal/messages.ts'
+export { x3dhInitiator, firstChain, hkdf32, dh as x25519SharedSecret, x25519Public } from './signal/kdf.ts'
+
+export {
+  payOffline, offlineMessageJson, parseOfflineMessage, OFFLINE_MESSAGE_VERSION, OFFLINE_PAYMENT_PRIORITY
+} from './offline.ts'
+export type { OfflinePaymentMessage, OfflinePayParams, OfflinePayContext } from './offline.ts'
