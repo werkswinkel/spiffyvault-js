@@ -18,6 +18,9 @@ import type { Funder } from '@spiffyvault/payments'
 import { checkPayeeDomain, domainEntry, domainFileText } from '@spiffyvault/payments'
 import type { DomainFetch, PaymentLink, PeerKeySigner } from '@spiffyvault/payments'
 // #endregion
+// #region signed-imports
+import { formatPaymentLink, linkSignatureValid, signPaymentLink } from '@spiffyvault/payments'
+// #endregion
 // #region errors-imports
 import { PaymentError } from '@spiffyvault/payments'
 // #endregion
@@ -55,6 +58,16 @@ export async function shopFile (peerKey: PeerKeySigner, peerId: string, paymentK
   const file = domainFileText([entry]) // serve at https://shop.example/.well-known/spiffyvault.json
   // #endregion
   return file
+}
+
+/** A server signs the link it hands out with the payee's libp2p Ed25519 key. */
+export async function signedLink (peerKey: PeerKeySigner, peerId: string): Promise<{ text: string, valid: boolean }> {
+  // #region signed
+  const link = await signPaymentLink({ network: 'mainnet', peerId, amountSats: 2500, memo: 'Order 1042' }, peerKey)
+  const text = formatPaymentLink(link) // …&s=<signature>: changing any field now fails the check
+  const valid = linkSignatureValid(link) // a payer's check; pay() makes it too
+  // #endregion
+  return { text, valid }
 }
 
 export async function perPath (wallet: WalletInterface, ricochet: RicochetLike, payeePeerId: string, paymentKey: string, client?: MessageBoxSender): Promise<string[]> {

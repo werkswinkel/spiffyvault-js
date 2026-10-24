@@ -16,15 +16,19 @@
  * A link that names a domain (`d`) is paid only when the domain's file
  * vouches for the payee (checkPayeeDomain); otherwise DomainError, before
  * anything is asked of the payee.
+ *
+ * A signed link (`s`) is paid only when the signature checks; otherwise
+ * LinkChangedError. An unsigned link with a peer ID never falls back to
+ * PeerPay: only the payee's signature ties its key to the peer ID.
  */
 
 import { checkPayeeDomain } from './domain.ts'
 import type { DomainFetch } from './domain.ts'
-import { DomainError, LinkError, PaymentError, isPaymentError } from './errors.ts'
+import { DomainError, LinkChangedError, LinkError, PaymentError, isPaymentError } from './errors.ts'
 import type { PaymentPath } from './errors.ts'
 import { walletNetwork } from './funding.ts'
 import {
-  linkMismatch, noteToSend, parsePaymentKey, parsePaymentLink, parseRequestRef, paymentKeyMismatch, refusesBareKey
+  linkMismatch, linkSignatureValid, noteToSend, parsePaymentKey, parsePaymentLink, parseRequestRef, paymentKeyMismatch, refusesBareKey
 } from './link.ts'
 import type { PaymentLink } from './link.ts'
 import { payLive } from './live/live.ts'
@@ -94,6 +98,8 @@ export interface PayPlan {
   requestRef?: string
   /** The link's domain, which pay() checks before paying. */
   domain?: string
+  /** True for a link signed by its payee; undefined without a link. */
+  signed?: boolean
 }
 
 function prepare (code: 'bad-key' | 'bare-key' | 'amount-invalid' | 'no-route', message: string): PaymentError {
@@ -106,6 +112,7 @@ export async function planPayment (req: PayRequest, ctx: Pick<PayContext, 'netwo
   if (req.link !== undefined) {
     link = typeof req.link === 'string' ? parsePaymentLink(req.link) ?? undefined : req.link
     if (link === undefined) throw new LinkError('That is not a valid SpiffyVault payment link')
+    if (link.signature !== undefined && !linkSignatureValid(link)) throw new LinkChangedError()
   }
   const ours = ctx.network ?? (ctx.wallet !== undefined ? await walletNetwork(ctx.wallet) : undefined)
   if (ours === undefined) throw prepare('no-route', 'The payer network is not known: pass `network` or a BRC-100 wallet')
@@ -156,7 +163,8 @@ export async function planPayment (req: PayRequest, ctx: Pick<PayContext, 'netwo
     ...(note !== undefined ? { note } : {}),
     ...(walletId !== undefined ? { walletId } : {}),
     ...(requestRef !== undefined ? { requestRef } : {}),
-    ...(link?.domain !== undefined ? { domain: link.domain } : {})
+    ...(link?.domain !== undefined ? { domain: link.domain } : {}),
+    ...(link !== undefined ? { signed: link.signature !== undefined } : {})
   }
 }
 
@@ -227,7 +235,8 @@ export async function pay (req: PayRequest, ctx: PayContext): Promise<PaymentRes
       last = r; lastPath = 'offline'
     }
   }
-  const peerPayAllowed = plan.peerId === undefined || ctx.peerPay?.fallback === true
+  // A link's key is the fallback only when the payee signed the link.
+  const peerPayAllowed = plan.peerId === undefined || (ctx.peerPay?.fallback === true && plan.signed !== false)
   if (plan.paymentKey !== undefined && peerPayAllowed && ctx.wallet !== undefined) {
     if (last !== undefined && lastPath !== undefined) fallback(lastPath, 'peerpay', last)
     const paymentKey = plan.paymentKey

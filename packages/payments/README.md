@@ -184,6 +184,33 @@ const file = domainFileText([entry]) // serve at https://shop.example/.well-know
 ```
 <!-- /example -->
 
+## Signed links
+
+The app signs the links it makes: `s` is the payee's Ed25519 signature,
+by the key in the peer ID, over every other field, amount and note
+included. A payer refuses a signed link whose signature does not check
+(`LinkChangedError`, `link-changed`): someone changed it. A link with a peer
+ID that is not signed is still paid, but `pay()` never falls back from the
+peer ID to its payment key, since only the signature ties the key to the
+peer ID.
+
+A shop that sets its own amount drops `s` and adds `a` and `m` to the
+payee's fields. A server that holds the payee's key can sign instead:
+
+<!-- example: examples/parts.ts#signed-imports -->
+```ts
+import { formatPaymentLink, linkSignatureValid, signPaymentLink } from '@spiffyvault/payments'
+```
+<!-- /example -->
+
+<!-- example: examples/parts.ts#signed -->
+```ts
+const link = await signPaymentLink({ network: 'mainnet', peerId, amountSats: 2500, memo: 'Order 1042' }, peerKey)
+const text = formatPaymentLink(link) // …&s=<signature>: changing any field now fails the check
+const valid = linkSignatureValid(link) // a payer's check; pay() makes it too
+```
+<!-- /example -->
+
 ## One path at a time
 
 `payLive`, `payOffline` and `payViaPeerPay` do one path each, with no
@@ -279,6 +306,7 @@ try {
 | Code | Stage | Meaning |
 |---|---|---|
 | `bad-link`, `bad-key`, `bare-key`, `own-key`, `network-mismatch`, `amount-invalid`, `no-route` | prepare | Nothing was asked of anyone. |
+| `link-changed` | prepare | The link's signature does not match its fields (`LinkChangedError`): it was changed after the payee signed it. Do not pay it. |
 | `domain-refused` | prepare | The link's domain does not vouch for its payee (`DomainError`, with `domain` and `problem`): the link may have been changed. Do not pay it. |
 | `payee-unreachable`, `server-unreachable` | connect | The phone, or the Ricochet server, could not be reached. |
 | `no-invoice`, `bad-invoice`, `anchor-missing`, `anchor-invalid`, `anchor-other-network`, `prekeys-*` | request | No usable invoice (live) or anchor and prekeys (offline). Nothing was built. |

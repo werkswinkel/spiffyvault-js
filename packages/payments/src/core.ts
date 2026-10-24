@@ -5,7 +5,7 @@
 
 export {
   parsePaymentLink, formatPaymentLink, isPaymentLinkText, linkMismatch, noteToSend, addRefToNote, refInNote,
-  parseRequestRef, parsePaymentKey, formatPaymentKey, paymentKeyMismatch, refusesBareKey,
+  parseRequestRef, parsePaymentKey, formatPaymentKey, paymentKeyMismatch, refusesBareKey, linkSignedText, linkSignatureValid, signPaymentLink,
   MAX_AMOUNT_SATS, MAX_LINK_MEMO, MAX_LINK_WALLET_LABEL, MAX_NOTE
 } from './link.ts'
 export type { PaymentLink, ParsedPaymentKey } from './link.ts'
@@ -16,7 +16,7 @@ export {
 } from './networks.ts'
 export type { Network, WalletNetworkType } from './networks.ts'
 
-export { PaymentError, LinkError, NetworkMismatchError, DomainError, isPaymentError } from './errors.ts'
+export { PaymentError, LinkError, NetworkMismatchError, DomainError, LinkChangedError, isPaymentError } from './errors.ts'
 export type { PaymentErrorCode, PaymentPath, FailureStage, PaymentErrorOptions } from './errors.ts'
 
 export {

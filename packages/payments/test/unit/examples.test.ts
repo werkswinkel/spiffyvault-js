@@ -7,7 +7,7 @@ import type { WalletInterface } from '@bsv/sdk'
 import { anchorRecordJson, formatPaymentLink, prekeyBundleJson } from '../../src/index.ts'
 // The examples import the built package, so errors must come from it too.
 import { PaymentError, fundWithFunder } from '@spiffyvault/payments'
-import { handle, makeFunder, payeeLine, perPath, readLink, shopFile } from '../../examples/parts.ts'
+import { handle, makeFunder, payeeLine, perPath, readLink, shopFile, signedLink } from '../../examples/parts.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { anchorKey, fill, identityFromSeed, signAnchorRecord, signBundle } from '../support/payee.ts'
@@ -50,4 +50,12 @@ test('the domain example: a shop file the check accepts, and a changed link it r
   assert.equal(await payeeLine({ network: 'mainnet', peerId: shop.peerId, paymentKey: key, domain: 'shop.example' }, serve), 'Corner Shop · verified for shop.example')
   const stranger = (await identityFromSeed(fill(8))).peerId
   assert.equal(await payeeLine({ network: 'mainnet', peerId: stranger, domain: 'shop.example' }, serve), null)
+})
+
+test('the signed link example', async () => {
+  const { identityFromSeed, fill } = await import('../support/payee.ts')
+  const shop = await identityFromSeed(fill(7))
+  const { text, valid } = await signedLink(shop.libp2pKey, shop.peerId)
+  assert.equal(valid, true)
+  assert.match(text, /&s=[A-Za-z0-9_-]{86}$/)
 })

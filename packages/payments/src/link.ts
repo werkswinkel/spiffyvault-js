@@ -7,11 +7,14 @@
  */
 
 import { peerIdFromString } from '@libp2p/peer-id'
-import { runeLength, takeRunes } from './bytes.ts'
+import { ed25519 } from '@noble/curves/ed25519.js'
+import { runeLength, takeRunes, utf8 } from './bytes.ts'
 import { normalizeDomain } from './domain.ts'
 import { NetworkMismatchError } from './errors.ts'
 import { canonicalNetwork, linkNetwork } from './networks.ts'
 import type { Network } from './networks.ts'
+import { ed25519KeyOfPeerId } from './peer.ts'
+import type { PeerKeySigner } from './domain.ts'
 
 export const PAY_LINK_HOST = 'spiffyvault.net'
 export const PAY_LINK_PATH = '/pay'
@@ -29,6 +32,7 @@ const WALLET_ID = /^[A-Za-z0-9_-]{1,64}$/
 const REF_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const REF = new RegExp(`^[${REF_ALPHABET}]{8}$`)
 const REF_IN_NOTE = new RegExp(`\\bref ([${REF_ALPHABET}]{8})\\b`, 'i')
+const SIGNATURE = /^[A-Za-z0-9_-]{86}$/
 const KEY_TEXT = /(?:\b(mainnet|testnet|regtest)\s*:\s*)?\b(0[23][0-9a-fA-F]{64})\b/i
 
 export interface PaymentLink {
@@ -49,6 +53,13 @@ export interface PaymentLink {
    * checkPayeeDomain() verifies it, as the app does. pay() checks it.
    */
   domain?: string
+  /**
+   * The payee's signature over every other field (`s`): Ed25519 by the key
+   * in `peerId`, base64url without padding, over linkSignedText(). Check it
+   * with linkSignatureValid(); pay() refuses a link whose signature fails,
+   * and falls back to PeerPay only for a signed link.
+   */
+  signature?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +224,9 @@ function dartInt (text: string): number | null {
  * The payment link in `text`, or null when it is not one or a part of it
  * is not valid: an unknown network, a bad peer ID or key, an amount that is
  * not a whole positive number of satoshis within 21 million BSV, a bad
- * wallet ID, request reference or domain, or neither a peer ID nor a key.
+ * wallet ID, request reference, domain or signature (not 64 bytes, or
+ * without a peer ID), or neither a peer ID nor a key. It does not check the
+ * signature: linkSignatureValid() does.
  */
 export function parsePaymentLink (text: string): PaymentLink | null {
   const u = splitUri(text.trim())
@@ -255,6 +268,10 @@ export function parsePaymentLink (text: string): PaymentLink | null {
   const domain = normalizeDomain(rawDomain)
   if (rawDomain !== undefined && domain === null) return null
 
+  // A signature needs the peer ID whose key made it.
+  const signature = blank(q.get('s'))
+  if (signature !== undefined && (peerId === undefined || !SIGNATURE.test(signature))) return null
+
   const link: PaymentLink = { network }
   if (peerId !== undefined) link.peerId = peerId
   if (key !== undefined) link.paymentKey = key
@@ -268,12 +285,14 @@ export function parsePaymentLink (text: string): PaymentLink | null {
   }
   if (requestRef !== null) link.requestRef = requestRef
   if (domain !== null) link.domain = domain
+  if (signature !== undefined) link.signature = signature
   return link
 }
 
 /** The link as text, as the app writes it for its QR code. Throws on a domain that is not one. */
 export function formatPaymentLink (link: PaymentLink): string {
   if (link.domain !== undefined && normalizeDomain(link.domain) !== link.domain) throw new TypeError(`not a domain: ${link.domain}`)
+  if (link.signature !== undefined && (link.peerId === undefined || !SIGNATURE.test(link.signature))) throw new TypeError('not a link signature')
   const q = new URLSearchParams()
   q.set('n', link.network)
   if (link.peerId !== undefined) q.set('p', link.peerId)
@@ -284,6 +303,7 @@ export function formatPaymentLink (link: PaymentLink): string {
   if (link.walletId !== undefined && link.walletLabel !== undefined) q.set('wl', link.walletLabel)
   if (link.requestRef !== undefined) q.set('r', link.requestRef)
   if (link.domain !== undefined) q.set('d', link.domain)
+  if (link.signature !== undefined) q.set('s', link.signature)
   return `https://${PAY_LINK_HOST}${PAY_LINK_PATH}?${q.toString().replace(/\+/g, '%20')}`
 }
 
@@ -291,4 +311,67 @@ export function formatPaymentLink (link: PaymentLink): string {
 export function linkMismatch (link: Pick<PaymentLink, 'network'>, ourNetwork: string): NetworkMismatchError | null {
   const ours = canonicalNetwork(ourNetwork)
   return ours === link.network ? null : new NetworkMismatchError(link.network, ours, 'code')
+}
+
+// ---------------------------------------------------------------------------
+// Signed links (the app's PaymentLink.signedText)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the payee signs (`s`): every field but `s`, each on its own line in
+ * this order, empty when absent, with the parsed values (as parsePaymentLink
+ * returns them: the key in lower case, note and wallet name cleaned).
+ */
+export function linkSignedText (link: PaymentLink): string {
+  const label = link.walletId === undefined ? undefined : link.walletLabel
+  return [
+    'spiffyvault-link/1',
+    `n=${link.network}`,
+    `p=${link.peerId ?? ''}`,
+    `k=${link.paymentKey ?? ''}`,
+    `a=${link.amountSats ?? ''}`,
+    `m=${link.memo ?? ''}`,
+    `w=${link.walletId ?? ''}`,
+    `wl=${label ?? ''}`,
+    `r=${link.requestRef ?? ''}`,
+    `d=${link.domain ?? ''}`
+  ].join('\n')
+}
+
+const b64url = (bytes: Uint8Array): string => {
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+const fromB64url = (text: string): Uint8Array => {
+  const bin = atob(text.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - text.length % 4) % 4))
+  return Uint8Array.from(bin, c => c.charCodeAt(0))
+}
+
+/** Whether the link's `s` is its payee's signature: false without one, or when it does not check. */
+export function linkSignatureValid (link: PaymentLink): boolean {
+  if (link.signature === undefined || link.peerId === undefined || !SIGNATURE.test(link.signature)) return false
+  const key = ed25519KeyOfPeerId(link.peerId)
+  if (key === null) return false
+  try {
+    return ed25519.verify(fromB64url(link.signature), utf8(linkSignedText(link)), key)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The link signed by `signer`, the private key of its peer ID (a libp2p
+ * Ed25519 key), as the app signs the links it makes. Throws when the link
+ * has no peer ID, or the signature does not check against it.
+ */
+export async function signPaymentLink (link: PaymentLink, signer: PeerKeySigner): Promise<PaymentLink> {
+  if (link.peerId === undefined) throw new TypeError('Only a link with a peer ID can be signed')
+  const { signature: _old, ...rest } = link
+  const unsigned: PaymentLink = { ...rest }
+  if (unsigned.walletId === undefined) delete unsigned.walletLabel
+  const signed: PaymentLink = { ...unsigned, signature: b64url(await signer.sign(utf8(linkSignedText(unsigned)))) }
+  if (!linkSignatureValid(signed)) throw new Error('The signature does not match the peer ID: sign with its own key')
+  return signed
 }

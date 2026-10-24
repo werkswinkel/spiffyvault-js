@@ -31,7 +31,7 @@ export type PaymentErrorCode =
   | 'prekeys-missing' | 'prekeys-not-public' | 'prekeys-invalid'
   | 'funding-failed' | 'beef-unusable' | 'broadcast-failed'
   | 'mailbox-refused' | 'delivery-unknown' | 'not-confirmed' | 'payee-refused' | 'network-refused'
-  | 'peerpay-undelivered' | 'aborted' | 'domain-refused'
+  | 'peerpay-undelivered' | 'aborted' | 'domain-refused' | 'link-changed'
 
 export interface PaymentErrorOptions {
   path?: PaymentPath
@@ -120,6 +120,18 @@ export class DomainError extends PaymentError {
     this.name = 'DomainError'
     this.domain = domain
     this.problem = problem
+  }
+}
+
+/**
+ * The link's signature does not match its contents: someone changed it
+ * after the payee made it. Refused, as the app refuses it.
+ */
+export class LinkChangedError extends PaymentError {
+  constructor () {
+    super('link-changed', 'This link was changed after the payee signed it. Do not pay it; ask the payee for a new link.',
+      { stage: 'prepare', canPayAnotherWay: false })
+    this.name = 'LinkChangedError'
   }
 }
 

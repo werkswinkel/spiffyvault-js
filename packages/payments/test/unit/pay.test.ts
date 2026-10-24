@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PrivateKey } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
-import { NetworkMismatchError, PaymentError, anchorRecordJson, formatPaymentLink, pay, planPayment, prekeyBundleJson } from '../../src/index.ts'
+import { NetworkMismatchError, PaymentError, anchorRecordJson, formatPaymentLink, pay, planPayment, prekeyBundleJson, signPaymentLink } from '../../src/index.ts'
 import type { MessageBoxSender, PayContext } from '../../src/index.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
@@ -60,11 +60,15 @@ test('only a key: PeerPay, to the default host unless one is given', async () =>
   assert.equal(JSON.parse(box.sent[0]!).amount, 99)
 })
 
-test('PeerPay after live and offline failed only when allowed', async () => {
+test('PeerPay after live and offline failed only when allowed, and only for a signed link', async () => {
   const id = await identityFromSeed(randomBytes(32))
   const empty = new MemRicochet('x').as((await identityFromSeed(fill(2))).peerId)
   const key = PrivateKey.fromRandom().toPublicKey().toString()
-  const link = formatPaymentLink({ network: 'testnet', peerId: id.peerId, paymentKey: key, amountSats: 5 })
+  const unsigned = { network: 'testnet' as const, peerId: id.peerId, paymentKey: key, amountSats: 5 }
+  // Unsigned: the key may be anyone's, so no PeerPay even when allowed.
+  const u = await pay({ link: formatPaymentLink(unsigned) }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, peerPay: { client: new Box(), fallback: true } }).catch(x => x)
+  assert.equal(u.code, 'anchor-missing')
+  const link = formatPaymentLink(await signPaymentLink(unsigned, id.libp2pKey))
   const e = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, peerPay: { client: new Box() } }).catch(x => x)
   assert.ok(e instanceof PaymentError)
   assert.equal(e.code, 'anchor-missing')
