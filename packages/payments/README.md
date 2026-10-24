@@ -318,6 +318,68 @@ try {
 | `network-refused` | settle | The phone took it, then the network refused it (for example a double spend): the payee was not paid. Inputs stay reserved until the txid is known not to be on the network. |
 | `broadcast-failed`, `peerpay-undelivered` | pay, deliver | PeerPay: the broadcast failed, or the token was not delivered after it. `PeerPayUndeliveredError` keeps the token for `deliverPeerPayToken()`. |
 
+## Being paid
+
+A node can be paid live the way a phone is: the app pays its peer ID
+through the Ricochet server's circuit relay, and the payment arrives as it
+happens.
+
+<!-- example: examples/payee.ts#payee-imports -->
+```ts
+import { acceptLivePayments, createPaymentNode, formatPaymentLink, waitUntilReachable } from '@spiffyvault/payments/node'
+import type { LivePayeeOptions, ReceivedLivePayment } from '@spiffyvault/payments/node'
+```
+<!-- /example -->
+
+<!-- example: examples/payee.ts#payee -->
+```ts
+// A reservation on the relay, and identify push, so the app finds this peer ID.
+const { node } = await createPaymentNode({ payee: true, ...(relay !== undefined ? { relay } : {}) })
+await waitUntilReachable(node)
+const payee = await acceptLivePayments(node, {
+  network: 'testnet',
+  invoiceAddress: r => addressFor(r.invoiceId), // a new address per invoice, one you can spend
+  onPayment: p => { keep(p) }, // checked by SPV and on the network: keep p.beefV1 and p.vouts
+  onEvent: e => { console.log(`payee: ${e.kind}`) },
+  ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and ARC
+})
+// The app pays this link live; signPaymentLink() adds a signature.
+const link = formatPaymentLink({ network: 'testnet', peerId: node.peerId.toString(), amountSats: 2500 })
+```
+<!-- /example -->
+
+In a browser, import from `@spiffyvault/payments/browser`: the same
+`createPaymentNode({ payee: true })` listens through the relay's WSS
+address. https://shop.spiffyvault.net/pay-from-browser/ is a page built this
+way.
+
+How the app finds the payee: before every live payment it asks the Ricochet
+server's DHT for the peer ID (FIND_PEER) and dials the relay address it gets
+back. The server only knows that address if the payee told it after the
+reservation was made. Its first identify with the server runs before the
+reservation exists, so a payee needs identify push (`identifyPush` from
+`@libp2p/identify`), which `createPaymentNode` always turns on. A js-libp2p
+node of your own without it can be dialled directly but not found, and the
+app reports it as not online.
+
+What `acceptLivePayments` does, as the app's payee does:
+
+- Answers `payment_request` with an invoice for the address
+  `invoiceAddress` returns, or with `payment_error` when `screen` refuses
+  it. The invoice is held for 60 s.
+- Takes the `beef_payment` only for that invoice and from the same payer.
+  It reads the BEEF V1, checks that the outputs to the invoice's address pay
+  at least the amount, and checks the transaction by SPV (`chainTracker`).
+- Broadcasts the unproven ancestors, then the payment (`broadcaster`,
+  default `arcBroadcaster`: ARC, following a `RECEIVED` answer for a few
+  seconds).
+- Calls `onPayment`, then tells the payer it is done. When `onPayment`
+  throws, the payer still hears success: the payment is on the network.
+  Keep the coin (`beefV1`, `vouts`, the invoice's key) before returning.
+- A payment that does not check out is refused (`payee-refused` for the
+  payer); one the network refuses is reported as not broadcast
+  (`not-confirmed`). Nothing is kept for either.
+
 ## What the library does, and does not do
 
 - It checks the payee's anchor record as the app does, and checks one more
