@@ -1,8 +1,9 @@
 # @spiffyvault/payments
 
 Pay a SpiffyVault user from a web app, a JavaScript or Electron wallet, or
-a Node.js service. Payer side only. The bytes on the wire are the same as
-the SpiffyVault app's, on all three of its payment paths:
+a Node.js service, and be paid live by one ([Being paid](#being-paid)). The
+bytes on the wire are the same as the SpiffyVault app's, on all three of
+its payment paths:
 
 | Path | How | Who broadcasts |
 |---|---|---|
@@ -276,7 +277,34 @@ const funder: Funder = async (outputs, info) => {
 
 The library checks that the funded transaction pays every output it asked
 for. It does not check the fee: the payee's ARC refuses a fee that is too
-low, after the payment was handed over.
+low, after the payment was handed over. The app pays 100 satoshis per
+kilobyte (`SatoshisPerKilobyte(100)` in `@bsv/sdk`).
+
+A funder of your own keeps track of its coins. What the browser wallet at
+https://shop.spiffyvault.net/pay-from-browser/ needed:
+
+- **Hold the inputs from the moment the transaction is built.** Live and
+  offline payments are broadcast by the payee, which may happen at any
+  time after the payment leaves you: a mailbox payment waits until the
+  phone collects it. Mark the inputs spent when you build, and free them
+  only in `abort()`. The library calls it only when the payment was given
+  up before it left.
+- **Spend your own change before the network has it.** The next payment
+  may have to spend change from one the payee has not broadcast yet. Keep
+  each payment's transaction and put it in the next BEEF as an unproven
+  parent; the payee broadcasts parents first.
+- **Never forget a payment the payee may still broadcast.** Clearing the
+  marks lets the next payment spend the same coins. Whichever transaction
+  reaches the network first wins; the other payee's broadcast is refused
+  and that payee is not paid. Two tabs on one browser wallet can pick the
+  same coins too: build one payment at a time.
+- **Allow for indexer lag.** WhatsOnChain lists a new coin a few seconds
+  before it serves the transaction that made it (`/tx/<txid>/hex` answers
+  404). Retry for some seconds before telling the user the coin is
+  missing.
+- **Include every unproven ancestor.** Each input must chain back, inside
+  the BEEF, to a transaction with a merkle proof: the payee checks by SPV
+  and ARC needs the parents.
 
 ## Errors
 
@@ -353,6 +381,21 @@ In a browser, import from `@spiffyvault/payments/browser`: the same
 address. https://shop.spiffyvault.net/pay-from-browser/ is a page built this
 way.
 
+Staying payable:
+
+- **Keep one peer ID.** The link names the peer ID, so pass the same
+  `privateKey` to `createPaymentNode` every time (the page keeps it in
+  local storage, as a protobuf from `privateKeyToProtobuf` in
+  `@libp2p/crypto/keys`). A new key on
+  every load makes every link shared before it dead.
+- **Stay connected to the relay.** The reservation lasts only while the
+  connection does. Check `isReachable(node)` now and then and dial the
+  relay again when it is false; a new reservation follows. A closed page
+  cannot be paid live: put the payee's BRC-100 key (`k`) in the link too,
+  and the app can offer to pay it by PeerPay instead.
+- **Sign the link** with the node's key (`signPaymentLink`), so a changed
+  link is refused.
+
 How the app finds the payee: before every live payment it asks the Ricochet
 server's DHT for the peer ID (FIND_PEER) and dials the relay address it gets
 back. The server only knows that address if the payee told it after the
@@ -380,6 +423,43 @@ What `acceptLivePayments` does, as the app's payee does:
   payer); one the network refuses is reported as not broadcast
   (`not-confirmed`). Nothing is kept for either.
 
+### Receiving PeerPay without a BRC-100 wallet
+
+The library sends PeerPay but does not receive it. The browser wallet above
+reads its own inbox with `@bsv/message-box-client`:
+
+- `ProtoWallet` from `@bsv/sdk`, made from the identity key, is enough for
+  the server's BRC-103 authentication and for decrypting messages.
+- Read with `listMessagesLite({ messageBox: PEERPAY_MESSAGE_BOX, host })`
+  and pass the host every time (`DEFAULT_MESSAGE_BOX_HOST`, or the one you
+  chose). `listMessages` tries to take payments in with
+  `internalizeAction`, which a `ProtoWallet` cannot do.
+- The coin's key is BRC-29: protocol `BRC29_PROTOCOL_ID`, key ID
+  `<derivationPrefix> <derivationSuffix>`, counterparty the sender's
+  identity key. Check that the output at `outputIndex` (default 0) pays
+  that key the token's amount, and check the transaction by SPV.
+- Acknowledge a message (`acknowledgeMessage`) only once the coin is kept:
+  acknowledging deletes it from the server.
+
+The app pays a link that has only `k` by PeerPay. The paying app needs its
+own BRC-100 payment key for that, because it signs in to the message box
+with it; without one it reports that no BRC-100 identity was found. To set
+it up: avatar, **Identity & keys**, **BRC-100 payment key**, **Set up**. An
+app that is to be paid by PeerPay needs the key too.
+
+
+## Troubleshooting
+
+| What you see | Why | What to do |
+|---|---|---|
+| The app says a live payee is not online, though the payee shows it is reachable | The server's DHT has no relay address for the payee: its node has no identify push, so the address made after the reservation never reached the server | Use `createPaymentNode`, or add `identifyPush` from `@libp2p/identify` to your own node |
+| Your own DHT lookup of a fresh payee answers "Not found" | The push follows the reservation by a second or two | Retry for a few seconds |
+| Dialling `<relay udx address>/p2p-circuit/p2p/<payee>` fails with "no valid addresses" | js-libp2p's circuit transport does not know `/udx` | Dial the relay, then `/p2p/<relay>/p2p-circuit/p2p/<payee>` (`dialPayee` does this) |
+| A wallet you just funded says WhatsOnChain has no transaction | Indexer lag (see [Funding](#funding)) | Retry for some seconds |
+| A mailbox payment is collected but never reaches the network | Its coins were spent again before the payee broadcast it (see [Funding](#funding)) | Hold inputs until `abort()`; one payment at a time |
+| The app will not pay a link with only `k`: no BRC-100 identity found | The paying app has no BRC-100 payment key | Set it up in the app ([Receiving PeerPay](#receiving-peerpay-without-a-brc-100-wallet)) |
+| `identify` or the reservation fails in a browser with "Protocol 768 was unknown" | The `/udx` multiaddr codec is not registered | Import from `@spiffyvault/payments/browser`, which registers it, or `import '@stephanfeb/libp2p-udx/multiaddr'` first |
+
 ## What the library does, and does not do
 
 - It checks the payee's anchor record as the app does, and checks one more
@@ -405,7 +485,7 @@ From `packages/payments`:
 | Command | Needs | What |
 |---|---|---|
 | `npm run test:unit` | | Links, frames, BEEF, derivation, the app's test vectors, path choice |
-| `npm run test:integration` | PostgreSQL, Go, `../go-ricochet` | A local go-ricochet (throwaway database `ricochet_payments_test`): offline submit and payee-side decrypt; live through the relay to a mock payee, over UDX |
+| `npm run test:integration` | PostgreSQL, Go, `../go-ricochet` | A local go-ricochet (throwaway database `ricochet_payments_test`): offline submit and payee-side decrypt; live through the relay to a mock payee, over UDX; a payee found through the server's DHT and paid, as the app does it |
 | `npm run test:browser` | as above, plus Chrome | Live from headless Chrome over WS and WSS, through the relay to a UDX payee; offline from Chrome |
 | `npm run check:bundle` | | The browser entries have no Node built-ins, no UDX transport and no wallet-toolbox |
 | `node tools/gen-dart-fixture.ts <out.json>` | | JS-made offline messages for the app's `test/signal/js_interop_test.dart` |
