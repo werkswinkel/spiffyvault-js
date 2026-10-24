@@ -16,8 +16,16 @@ export {
 } from './networks.ts'
 export type { Network, WalletNetworkType } from './networks.ts'
 
-export { PaymentError, LinkError, NetworkMismatchError, isPaymentError } from './errors.ts'
+export { PaymentError, LinkError, NetworkMismatchError, DomainError, isPaymentError } from './errors.ts'
 export type { PaymentErrorCode, PaymentPath, FailureStage, PaymentErrorOptions } from './errors.ts'
+
+export {
+  normalizeDomain, domainFileUrl, domainSignedText, domainEntry, domainFileText, checkPayeeDomain, verifyDomainFile,
+  DOMAIN_FILE_VERSION, DOMAIN_FILE_PATH, MAX_DOMAIN_FILE_BYTES, DOMAIN_TIMEOUT_MS, MAX_DOMAIN_NAME
+} from './domain.ts'
+export type {
+  DomainFileEntry, PeerKeySigner, DomainEntryParams, DomainProblem, DomainCheck, DomainFetch, DomainCheckParams
+} from './domain.ts'
 
 export type { PaymentResult, PaymentStatus, PaymentProgress, FundingContext } from './types.ts'
 

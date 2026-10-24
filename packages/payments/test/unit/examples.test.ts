@@ -7,7 +7,7 @@ import type { WalletInterface } from '@bsv/sdk'
 import { anchorRecordJson, formatPaymentLink, prekeyBundleJson } from '../../src/index.ts'
 // The examples import the built package, so errors must come from it too.
 import { PaymentError, fundWithFunder } from '@spiffyvault/payments'
-import { handle, makeFunder, perPath, readLink } from '../../examples/parts.ts'
+import { handle, makeFunder, payeeLine, perPath, readLink, shopFile } from '../../examples/parts.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { anchorKey, fill, identityFromSeed, signAnchorRecord, signBundle } from '../support/payee.ts'
@@ -39,4 +39,15 @@ test('README: a funder and error handling', async () => {
   assert.match(r, /safe to try again or another way \(beef-unusable\)/)
   assert.equal(released, 1)
   assert.match(await handle(async () => { throw new PaymentError('not-confirmed', 'x', { stage: 'settle', canPayAnotherWay: false, txid: 'ab' }) }), /do not pay again: not-confirmed ab/)
+})
+
+test('the domain example: a shop file the check accepts, and a changed link it refuses', async () => {
+  const { identityFromSeed, fill } = await import('../support/payee.ts')
+  const shop = await identityFromSeed(fill(7))
+  const key = '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc'
+  const file = new TextEncoder().encode(await shopFile(shop.libp2pKey, shop.peerId, key))
+  const serve = async (): Promise<Uint8Array> => file
+  assert.equal(await payeeLine({ network: 'mainnet', peerId: shop.peerId, paymentKey: key, domain: 'shop.example' }, serve), 'Corner Shop · verified for shop.example')
+  const stranger = (await identityFromSeed(fill(8))).peerId
+  assert.equal(await payeeLine({ network: 'mainnet', peerId: stranger, domain: 'shop.example' }, serve), null)
 })

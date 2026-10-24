@@ -12,9 +12,15 @@
  *
  * A failure that may have handed a transaction over stops there: the
  * payee is never paid twice.
+ *
+ * A link that names a domain (`d`) is paid only when the domain's file
+ * vouches for the payee (checkPayeeDomain); otherwise DomainError, before
+ * anything is asked of the payee.
  */
 
-import { LinkError, PaymentError, isPaymentError } from './errors.ts'
+import { checkPayeeDomain } from './domain.ts'
+import type { DomainFetch } from './domain.ts'
+import { DomainError, LinkError, PaymentError, isPaymentError } from './errors.ts'
 import type { PaymentPath } from './errors.ts'
 import { walletNetwork } from './funding.ts'
 import {
@@ -73,6 +79,8 @@ export interface PayContext extends FundingContext {
   peerPay?: { host?: string, client?: MessageBoxSender, fallback?: boolean }
   /** Pay a bare (unlabelled) payment key from a testnet wallet (the app's "Advanced"). */
   allowBareKey?: boolean
+  /** How a link's domain file is read (default fetch(): HTTPS, no redirects, 5 s, 16 KiB). */
+  domainFetch?: DomainFetch
   signal?: AbortSignal
 }
 
@@ -84,6 +92,8 @@ export interface PayPlan {
   note?: string
   walletId?: string
   requestRef?: string
+  /** The link's domain, which pay() checks before paying. */
+  domain?: string
 }
 
 function prepare (code: 'bad-key' | 'bare-key' | 'amount-invalid' | 'no-route', message: string): PaymentError {
@@ -145,13 +155,28 @@ export async function planPayment (req: PayRequest, ctx: Pick<PayContext, 'netwo
     amountSats,
     ...(note !== undefined ? { note } : {}),
     ...(walletId !== undefined ? { walletId } : {}),
-    ...(requestRef !== undefined ? { requestRef } : {})
+    ...(requestRef !== undefined ? { requestRef } : {}),
+    ...(link?.domain !== undefined ? { domain: link.domain } : {})
   }
 }
 
 /** Pays a link, peer or key, choosing the path as the app does. */
 export async function pay (req: PayRequest, ctx: PayContext): Promise<PaymentResult> {
   const plan = await planPayment(req, ctx)
+  let payeeDomain: PaymentResult['payeeDomain']
+  if (plan.domain !== undefined) {
+    ctx.onProgress?.({ path: plan.peerId !== undefined ? (ctx.libp2p !== undefined ? 'live' : 'offline') : 'peerpay', step: 'domain', detail: plan.domain })
+    const check = await checkPayeeDomain({
+      domain: plan.domain,
+      network: plan.network,
+      ...(plan.peerId !== undefined ? { peerId: plan.peerId } : {}),
+      ...(plan.paymentKey !== undefined ? { paymentKey: plan.paymentKey } : {}),
+      ...(ctx.domainFetch !== undefined ? { fetch: ctx.domainFetch } : {}),
+      ...(ctx.signal !== undefined ? { signal: ctx.signal } : {})
+    })
+    if (!check.verified) throw new DomainError(check.domain, check.problem)
+    payeeDomain = { domain: check.domain, ...(check.name !== undefined ? { name: check.name } : {}) }
+  }
   const attempts: PaymentError[] = []
   const funding: FundingContext = {
     ...(ctx.wallet !== undefined ? { wallet: ctx.wallet } : {}),
@@ -165,7 +190,7 @@ export async function pay (req: PayRequest, ctx: PayContext): Promise<PaymentRes
   }
   const attempt = async (path: PaymentPath, run: () => Promise<PaymentResult>): Promise<PaymentResult | PaymentError> => {
     try {
-      return { ...(await run()), attempts: [...attempts] }
+      return { ...(await run()), attempts: [...attempts], ...(payeeDomain !== undefined ? { payeeDomain } : {}) }
     } catch (e) {
       if (isPaymentError(e) && e.canPayAnotherWay) return e
       throw isPaymentError(e) ? e.withAttempts([...attempts]) : new PaymentError('funding-failed', String(e), { path, stage: 'pay', canPayAnotherWay: false, attempts: [...attempts], cause: e })

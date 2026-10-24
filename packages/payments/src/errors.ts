@@ -5,6 +5,8 @@
  * the payee has left this side (so trying another path cannot pay twice).
  */
 
+import type { DomainProblem } from './domain.ts'
+
 export type PaymentPath = 'live' | 'offline' | 'peerpay'
 
 /**
@@ -29,7 +31,7 @@ export type PaymentErrorCode =
   | 'prekeys-missing' | 'prekeys-not-public' | 'prekeys-invalid'
   | 'funding-failed' | 'beef-unusable' | 'broadcast-failed'
   | 'mailbox-refused' | 'delivery-unknown' | 'not-confirmed' | 'payee-refused' | 'network-refused'
-  | 'peerpay-undelivered' | 'aborted'
+  | 'peerpay-undelivered' | 'aborted' | 'domain-refused'
 
 export interface PaymentErrorOptions {
   path?: PaymentPath
@@ -101,6 +103,23 @@ export class NetworkMismatchError extends PaymentError {
     this.name = 'NetworkMismatchError'
     this.theirs = theirs
     this.ours = ours
+  }
+}
+
+/**
+ * The link names a domain (`d`) that does not vouch for its payee: the
+ * link may have been changed. Refused, as the app refuses it; nothing was
+ * asked of the payee.
+ */
+export class DomainError extends PaymentError {
+  readonly domain: string
+  readonly problem: DomainProblem
+  constructor (domain: string, problem: DomainProblem) {
+    super('domain-refused', `${domain} does not vouch for this payee (${problem}). The link may have been changed; do not pay it.`,
+      { stage: 'prepare', canPayAnotherWay: false })
+    this.name = 'DomainError'
+    this.domain = domain
+    this.problem = problem
   }
 }
 

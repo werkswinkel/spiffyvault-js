@@ -14,6 +14,10 @@ import { payOffline, payViaPeerPay } from '@spiffyvault/payments'
 // #region funder-imports
 import type { Funder } from '@spiffyvault/payments'
 // #endregion
+// #region domain-imports
+import { checkPayeeDomain, domainEntry, domainFileText } from '@spiffyvault/payments'
+import type { DomainFetch, PaymentLink, PeerKeySigner } from '@spiffyvault/payments'
+// #endregion
 // #region errors-imports
 import { PaymentError } from '@spiffyvault/payments'
 // #endregion
@@ -26,6 +30,31 @@ export function readLink (text: string): { network: string, peerId?: string, not
   const note = noteToSend(link, link.memo) // adds "ref <r>" for a payment-request link
   // #endregion
   return { network: link.network, ...(link.peerId !== undefined ? { peerId: link.peerId } : {}), ...(note !== undefined ? { note } : {}), wrongNetwork }
+}
+
+/** The line to show above a payment, or null when the link must not be paid. */
+export async function payeeLine (link: PaymentLink, fetch?: DomainFetch): Promise<string | null> {
+  if (link.domain === undefined) return 'Not verified: check who you are paying'
+  // #region domain
+  const check = await checkPayeeDomain({
+    domain: link.domain,
+    network: link.network,
+    ...(link.peerId !== undefined ? { peerId: link.peerId } : {}),
+    ...(link.paymentKey !== undefined ? { paymentKey: link.paymentKey } : {}),
+    ...(fetch !== undefined ? { fetch } : {})
+  })
+  if (!check.verified) return null // refuse: check.problem says why ('not-listed', 'unreachable', …)
+  return `${check.name ?? check.domain} · verified for ${check.domain}`
+  // #endregion
+}
+
+/** A shop's server writes its file with the payee's libp2p Ed25519 key. */
+export async function shopFile (peerKey: PeerKeySigner, peerId: string, paymentKey: string): Promise<string> {
+  // #region domain-entry
+  const entry = await domainEntry({ domain: 'shop.example', peerId, paymentKey, networks: ['mainnet'], name: 'Corner Shop' }, peerKey)
+  const file = domainFileText([entry]) // serve at https://shop.example/.well-known/spiffyvault.json
+  // #endregion
+  return file
 }
 
 export async function perPath (wallet: WalletInterface, ricochet: RicochetLike, payeePeerId: string, paymentKey: string, client?: MessageBoxSender): Promise<string[]> {

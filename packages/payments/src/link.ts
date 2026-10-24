@@ -3,11 +3,12 @@
  * lib/services/payment_link.dart, lib/services/payment_requests.dart and
  * lib/services/brc100/payment_key_text.dart.
  *
- *     https://spiffyvault.net/pay?n=testnet&p=12D3KooW…&k=02…&a=10000&m=Coffee
+ *     https://spiffyvault.net/pay?n=testnet&p=12D3KooW…&k=02…&a=10000&m=Coffee&d=shop.example
  */
 
 import { peerIdFromString } from '@libp2p/peer-id'
 import { runeLength, takeRunes } from './bytes.ts'
+import { normalizeDomain } from './domain.ts'
 import { NetworkMismatchError } from './errors.ts'
 import { canonicalNetwork, linkNetwork } from './networks.ts'
 import type { Network } from './networks.ts'
@@ -43,6 +44,11 @@ export interface PaymentLink {
   walletLabel?: string
   /** The payment request this link pays (`r`). */
   requestRef?: string
+  /**
+   * The shop's domain that vouches for the payee (`d`): pay only when
+   * checkPayeeDomain() verifies it, as the app does. pay() checks it.
+   */
+  domain?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -207,7 +213,7 @@ function dartInt (text: string): number | null {
  * The payment link in `text`, or null when it is not one or a part of it
  * is not valid: an unknown network, a bad peer ID or key, an amount that is
  * not a whole positive number of satoshis within 21 million BSV, a bad
- * wallet ID or request reference, or neither a peer ID nor a key.
+ * wallet ID, request reference or domain, or neither a peer ID nor a key.
  */
 export function parsePaymentLink (text: string): PaymentLink | null {
   const u = splitUri(text.trim())
@@ -245,6 +251,10 @@ export function parsePaymentLink (text: string): PaymentLink | null {
   const requestRef = parseRequestRef(rawRef)
   if (rawRef !== undefined && requestRef === null) return null
 
+  const rawDomain = blank(q.get('d'))
+  const domain = normalizeDomain(rawDomain)
+  if (rawDomain !== undefined && domain === null) return null
+
   const link: PaymentLink = { network }
   if (peerId !== undefined) link.peerId = peerId
   if (key !== undefined) link.paymentKey = key
@@ -257,11 +267,13 @@ export function parsePaymentLink (text: string): PaymentLink | null {
     if (label !== undefined) link.walletLabel = label
   }
   if (requestRef !== null) link.requestRef = requestRef
+  if (domain !== null) link.domain = domain
   return link
 }
 
-/** The link as text, as the app writes it for its QR code. */
+/** The link as text, as the app writes it for its QR code. Throws on a domain that is not one. */
 export function formatPaymentLink (link: PaymentLink): string {
+  if (link.domain !== undefined && normalizeDomain(link.domain) !== link.domain) throw new TypeError(`not a domain: ${link.domain}`)
   const q = new URLSearchParams()
   q.set('n', link.network)
   if (link.peerId !== undefined) q.set('p', link.peerId)
@@ -271,6 +283,7 @@ export function formatPaymentLink (link: PaymentLink): string {
   if (link.walletId !== undefined) q.set('w', link.walletId)
   if (link.walletId !== undefined && link.walletLabel !== undefined) q.set('wl', link.walletLabel)
   if (link.requestRef !== undefined) q.set('r', link.requestRef)
+  if (link.domain !== undefined) q.set('d', link.domain)
   return `https://${PAY_LINK_HOST}${PAY_LINK_PATH}?${q.toString().replace(/\+/g, '%20')}`
 }
 

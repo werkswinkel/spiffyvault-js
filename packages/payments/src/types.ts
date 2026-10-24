@@ -34,12 +34,16 @@ export interface PaymentResult {
   outputIndex?: number
   /** Earlier attempts on other paths that failed safely (pay() only). */
   attempts: PaymentError[]
+  /** pay() of a link with `d`: the domain that vouched for the payee, and the shop name its file gives. */
+  payeeDomain?: { domain: string, name?: string }
 }
 
 export interface PaymentProgress {
   path: PaymentPath
   step: 'anchor' | 'prekeys' | 'derive' | 'fund' | 'seal' | 'submit' | 'dial' | 'request' | 'invoice' | 'send' | 'status' | 'network'
     | 'key' | 'deliver' | 'abort' | 'fallback'
+  /** pay(): checking the link's domain (`path` is the first path pay() will try). */
+    | 'domain'
   detail?: string
 }
 

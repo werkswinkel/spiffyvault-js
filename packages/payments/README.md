@@ -137,6 +137,53 @@ const note = noteToSend(link, link.memo) // adds "ref <r>" for a payment-request
 ```
 <!-- /example -->
 
+## Links that name a website
+
+A link may name the shop's domain (`d=shop.example`). The app then reads
+`https://shop.example/.well-known/spiffyvault.json` and pays only when that
+file lists the link's payee for the payer's network, signed by the payee's
+own peer key. `pay()` does the same: a link whose domain does not vouch for
+its payee fails with `DomainError` (`domain-refused`) before anything is
+asked of the payee, and a paid one comes back with `result.payeeDomain`.
+To show the payee before paying:
+
+<!-- example: examples/parts.ts#domain-imports -->
+```ts
+import { checkPayeeDomain, domainEntry, domainFileText } from '@spiffyvault/payments'
+import type { DomainFetch, PaymentLink, PeerKeySigner } from '@spiffyvault/payments'
+```
+<!-- /example -->
+
+<!-- example: examples/parts.ts#domain -->
+```ts
+const check = await checkPayeeDomain({
+  domain: link.domain,
+  network: link.network,
+  ...(link.peerId !== undefined ? { peerId: link.peerId } : {}),
+  ...(link.paymentKey !== undefined ? { paymentKey: link.paymentKey } : {}),
+  ...(fetch !== undefined ? { fetch } : {})
+})
+if (!check.verified) return null // refuse: check.problem says why ('not-listed', 'unreachable', …)
+return `${check.name ?? check.domain} · verified for ${check.domain}`
+```
+<!-- /example -->
+
+The check reads over HTTPS, follows no redirect, waits 5 s and reads at most
+16 KiB. In a browser the site must send `Access-Control-Allow-Origin` for the
+file; without it the answer is `unreachable`, as is a missing file served
+without that header. Either way the link is refused.
+
+The SpiffyVault app writes the file for its user (Identity, Your website).
+A shop's server can write it with the payee's libp2p Ed25519 key; the entry
+is byte for byte the app's for the same key:
+
+<!-- example: examples/parts.ts#domain-entry -->
+```ts
+const entry = await domainEntry({ domain: 'shop.example', peerId, paymentKey, networks: ['mainnet'], name: 'Corner Shop' }, peerKey)
+const file = domainFileText([entry]) // serve at https://shop.example/.well-known/spiffyvault.json
+```
+<!-- /example -->
+
 ## One path at a time
 
 `payLive`, `payOffline` and `payViaPeerPay` do one path each, with no
@@ -232,6 +279,7 @@ try {
 | Code | Stage | Meaning |
 |---|---|---|
 | `bad-link`, `bad-key`, `bare-key`, `own-key`, `network-mismatch`, `amount-invalid`, `no-route` | prepare | Nothing was asked of anyone. |
+| `domain-refused` | prepare | The link's domain does not vouch for its payee (`DomainError`, with `domain` and `problem`): the link may have been changed. Do not pay it. |
 | `payee-unreachable`, `server-unreachable` | connect | The phone, or the Ricochet server, could not be reached. |
 | `no-invoice`, `bad-invoice`, `anchor-missing`, `anchor-invalid`, `anchor-other-network`, `prekeys-*` | request | No usable invoice (live) or anchor and prekeys (offline). Nothing was built. |
 | `funding-failed` | pay | The wallet could not build it. `pay()` does not fall back (another path would fail the same way). |
