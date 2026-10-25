@@ -32,6 +32,21 @@ test('readOnFrame buffers across chunks and counts them', async () => {
   await assert.rejects(readOnFrame(none()), /before a frame/)
 })
 
+test('a header claiming a frame over the limit is refused before buffering (assessment finding 1)', async () => {
+  let pulled = 0
+  async function * hostile (): AsyncGenerator<Uint8Array> {
+    // A 4 GiB frame, then data for as long as the reader keeps reading.
+    yield Uint8Array.of(0x4f, 0x4e, 0x01, 0x01, 0xff, 0xff, 0xff, 0xff)
+    for (;;) { pulled++; yield new Uint8Array(64 * 1024) }
+  }
+  await assert.rejects(readOnFrame(hostile()), /over the limit of 262144/)
+  assert.equal(pulled, 0)
+  const f = encodeOnFrame({ type: 'x', pad: 'y'.repeat(100) })
+  async function * one (): AsyncGenerator<Uint8Array> { yield f }
+  await assert.rejects(readOnFrame(one(), undefined, { maxFrameBytes: 64 }), FrameError)
+  assert.deepEqual((await readOnFrame(one(), undefined, { maxFrameBytes: f.length })).payload.type, 'x')
+})
+
 test('session IDs are random, not pay_<ms>', () => {
   const a = newSessionId()
   assert.match(a, /^pay_\d+_[0-9a-f]{24}$/)

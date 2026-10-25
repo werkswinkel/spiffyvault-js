@@ -16,6 +16,19 @@ export const FRAME_MAGIC = [0x4f, 0x4e] as const
 export const FRAME_VERSION = 1
 export const PAYMENT_PROTOCOL_ID = 1
 export const FRAME_HEADER = 8
+/**
+ * The largest frame a reader takes by default, header included: the most
+ * the app writes in one yamux data frame (dart-libp2p's maxFrameSize,
+ * 256 KiB). A header claiming more is refused before anything is buffered,
+ * so a peer cannot make a payee hold an arbitrary amount in memory.
+ */
+export const DEFAULT_MAX_INBOUND_FRAME_BYTES = 256 * 1024
+
+/** How a reader reads: the largest frame it takes. */
+export interface FrameReadOptions {
+  /** Default [DEFAULT_MAX_INBOUND_FRAME_BYTES]. */
+  maxFrameBytes?: number
+}
 
 export function encodeOnFrame (payload: Record<string, unknown>, protocolId = PAYMENT_PROTOCOL_ID): Uint8Array {
   const json = utf8(JSON.stringify(payload))
@@ -61,8 +74,8 @@ export interface ReadFrameResult {
  * Reads one ON frame from a libp2p stream (buffering across chunks, unlike
  * the Dart reader). Rejects on EOF, a bad header, or `signal`.
  */
-export async function readOnFrame (source: AsyncIterable<Chunk>, signal?: AbortSignal): Promise<ReadFrameResult> {
-  const reader = openFrameReader(source)
+export async function readOnFrame (source: AsyncIterable<Chunk>, signal?: AbortSignal, options: FrameReadOptions = {}): Promise<ReadFrameResult> {
+  const reader = openFrameReader(source, options)
   try {
     return await reader.next(signal)
   } finally {
@@ -82,12 +95,13 @@ export interface FrameReader {
  * as a payee's payment_status and then its payment_network
  * (spiffyvault-voo).
  */
-export function openFrameReader (source: AsyncIterable<Chunk>): FrameReader {
+export function openFrameReader (source: AsyncIterable<Chunk>, options: FrameReadOptions = {}): FrameReader {
   const it = source[Symbol.asyncIterator]()
+  const max = options.maxFrameBytes ?? DEFAULT_MAX_INBOUND_FRAME_BYTES
   let rest: Uint8Array = new Uint8Array(0)
   return {
     next: async (signal) => {
-      const result = await readFrom(it, rest, signal)
+      const result = await readFrom(it, rest, max, signal)
       rest = result.rest
       return { payload: result.payload, chunks: result.chunks }
     },
@@ -95,7 +109,7 @@ export function openFrameReader (source: AsyncIterable<Chunk>): FrameReader {
   }
 }
 
-async function readFrom (it: AsyncIterator<Chunk>, carried: Uint8Array, signal?: AbortSignal): Promise<ReadFrameResult & { rest: Uint8Array }> {
+async function readFrom (it: AsyncIterator<Chunk>, carried: Uint8Array, max: number, signal?: AbortSignal): Promise<ReadFrameResult & { rest: Uint8Array }> {
   const parts: Uint8Array[] = carried.length > 0 ? [carried] : []
   let have = carried.length
   let need = -1
@@ -109,7 +123,10 @@ async function readFrom (it: AsyncIterator<Chunk>, carried: Uint8Array, signal?:
   aborted?.catch(() => {})
   const all = (): Uint8Array => { const b = new Uint8Array(have); let o = 0; for (const p of parts) { b.set(p, o); o += p.length } return b }
   const done = (): (ReadFrameResult & { rest: Uint8Array }) | undefined => {
-    if (need < 0 && have >= FRAME_HEADER) need = FRAME_HEADER + frameLength(all().subarray(0, FRAME_HEADER))
+    if (need < 0 && have >= FRAME_HEADER) {
+      need = FRAME_HEADER + frameLength(all().subarray(0, FRAME_HEADER))
+      if (need > max) throw new FrameError(`frame of ${need} bytes is over the limit of ${max}`)
+    }
     if (need < 0 || have < need) return undefined
     const bytes = all()
     return { payload: decodeOnFrame(bytes.subarray(0, need)), chunks, rest: bytes.slice(need) }

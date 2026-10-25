@@ -82,7 +82,8 @@ export {
 export type {
   LivePayee, LivePayeeOptions, LivePayeeEvent, LiveInvoiceRequest, ReceivedLivePayment, Broadcaster, BroadcastResult, ArcOptions
 } from './live/payee.ts'
-export { encodeOnFrame, decodeOnFrame, readOnFrame, openFrameReader, frameLength, FrameError, FRAME_HEADER, PAYMENT_PROTOCOL_ID } from './live/frame.ts'
+export { encodeOnFrame, decodeOnFrame, readOnFrame, openFrameReader, frameLength, FrameError, FRAME_HEADER, PAYMENT_PROTOCOL_ID, DEFAULT_MAX_INBOUND_FRAME_BYTES } from './live/frame.ts'
+export type { FrameReadOptions } from './live/frame.ts'
 export type { FrameReader } from './live/frame.ts'
 export type { ReadFrameResult } from './live/frame.ts'
 
