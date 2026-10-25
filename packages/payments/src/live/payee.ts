@@ -124,7 +124,11 @@ class Refusal extends Error {}
  * connections too: the app pays this node's peer ID as it pays a phone.
  */
 export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOptions): Promise<LivePayee> {
+  // By payer and session ID: by the ID alone, another peer that sent a
+  // request with a payer's session ID replaced that payer's session, and the
+  // payer's payment was then refused.
   const sessions = new Map<string, Session>()
+  const sessionKey = (payerPeerId: string, sessionId: string): string => `${payerPeerId} ${sessionId}`
   const sessionMs = options.sessionMs ?? PAYEE_SESSION_MS
   const readMs = options.readMs ?? 30_000
   const chainTracker = options.chainTracker ?? new WhatsOnChain(options.network === 'mainnet' ? 'main' : 'test')
@@ -170,7 +174,7 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
       return
     }
     prune()
-    sessions.set(sessionId, { request, address, at: Date.now() })
+    sessions.set(sessionKey(payerPeerId, sessionId), { request, address, at: Date.now() })
     reply(stream, {
       type: 'invoice_response',
       sessionId,
@@ -186,10 +190,11 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
 
   const onPayment = async (stream: Stream, msg: Record<string, unknown>, payerPeerId: string): Promise<void> => {
     const sessionId = typeof msg.sessionId === 'string' ? msg.sessionId : ''
-    const session = sessions.get(sessionId)
+    const key = sessionKey(payerPeerId, sessionId)
+    const session = sessions.get(key)
     // An unknown or expired session answers nothing, as the app's payee does.
     if (session === undefined || session.request.payerPeerId !== payerPeerId || msg.invoiceId !== session.request.invoiceId) return
-    sessions.delete(sessionId)
+    sessions.delete(key)
     const { request, address } = session
     event({ kind: 'checking', request, ...(typeof msg.txid === 'string' ? { txid: msg.txid } : {}) })
     try {

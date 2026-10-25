@@ -15,15 +15,33 @@ import {
 } from '../../src/node.ts'
 import type { Broadcaster, LivePayeeEvent, LivePayeeOptions, ReceivedLivePayment } from '../../src/node.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
+import { encodeOnFrame, readOnFrame } from '../../src/live/frame.ts'
+import { PAYMENT_PROTOCOL } from '../../src/live/live.ts'
 
 let payer: Libp2p
 let payee: Libp2p
+let other: Libp2p
 before(async () => {
   payee = (await createPaymentNode({ udxOnly: true, listen: ['/ip4/127.0.0.1/udp/0/udx'] })).node
   payer = (await createPaymentNode({ udxOnly: true })).node
+  other = (await createPaymentNode({ udxOnly: true })).node
   await payer.dial(payee.getMultiaddrs()[0]!)
+  await other.dial(payee.getMultiaddrs()[0]!)
 })
-after(async () => { await payer.stop(); await payee.stop() })
+after(async () => { await payer.stop(); await other.stop(); await payee.stop() })
+
+/** One frame from [from] to the payee on a new stream, and its answer: undefined when none comes. */
+async function ask (from: Libp2p, message: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+  const stream = await from.dialProtocol(payee.peerId, PAYMENT_PROTOCOL, { runOnLimitedConnection: true })
+  stream.send(encodeOnFrame(message))
+  try {
+    return (await readOnFrame(stream, AbortSignal.timeout(2000))).payload
+  } catch {
+    return undefined
+  } finally {
+    await stream.close().catch(() => {})
+  }
+}
 
 const anyRoot = { isValidRootForHeight: async () => true, currentHeight: async () => 1_000_000 }
 const asWallet = (w: FakeWallet): WalletInterface => w as unknown as WalletInterface
@@ -70,6 +88,21 @@ test('a live payment: invoice, payment checked and broadcast, kept, payer told i
     assert.equal(out.lockingScript.toHex(), new P2PKH().lock(run.keys.get(p.invoiceId)!.toPublicKey().toAddress('testnet')).toHex())
     assert.deepEqual(run.events.map(e => e.kind), ['request', 'checking', 'paid'])
     assert.equal(run.chains[0]!.at(-1)!.id('hex'), r.txid)
+  })
+})
+
+test("another peer's request with the same session ID leaves the payer's session alone", async () => {
+  await serving({}, async () => {
+    const request = { type: 'payment_request', sessionId: 'shared', requestId: 'r1', amount: '1000' }
+    const invoice = await ask(payer, request)
+    assert.equal(invoice?.type, 'invoice_response')
+    assert.equal((await ask(other, request))?.type, 'invoice_response')
+    // The payer's session still answers its payment: here refused, as the
+    // BEEF is not real. Replaced by the other peer's, it answered nothing.
+    const status = await ask(payer, { type: 'beef_payment', sessionId: 'shared', invoiceId: invoice?.invoiceId, beef: 'AAAA' })
+    assert.equal(status?.type, 'payment_status')
+    assert.equal(status?.success, false)
+    assert.match(String(status?.error), /BEEF/)
   })
 })
 
