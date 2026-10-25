@@ -106,6 +106,83 @@ test("another peer's request with the same session ID leaves the payer's session
   })
 })
 
+const request = (sessionId: string): Record<string, unknown> =>
+  ({ type: 'payment_request', sessionId, requestId: `r-${sessionId}`, amount: '1000' })
+const garbage = (sessionId: string, invoiceId: unknown): Record<string, unknown> =>
+  ({ type: 'beef_payment', sessionId, invoiceId, beef: 'AAAA' })
+
+test('a payer may hold three unpaid invoices; the fourth request is refused before an address is used', async () => {
+  await serving({}, async run => {
+    for (const id of ['a', 'b', 'c']) assert.equal((await ask(payer, request(id)))?.type, 'invoice_response')
+    const refused = await ask(payer, request('d'))
+    assert.equal(refused?.type, 'payment_error')
+    assert.equal(refused?.code, 'busy')
+    assert.equal(refused?.requestId, 'r-d')
+    assert.equal(run.keys.size, 3)
+    // Another payer still gets an invoice.
+    assert.equal((await ask(other, request('a')))?.type, 'invoice_response')
+  })
+})
+
+test('all payers together hold at most `open` unpaid invoices', async () => {
+  await serving({ limits: { open: 2 } }, async () => {
+    assert.equal((await ask(payer, request('a')))?.type, 'invoice_response')
+    assert.equal((await ask(other, request('a')))?.type, 'invoice_response')
+    assert.match(String((await ask(payer, request('b')))?.error), /Too many payment requests at once/)
+  })
+})
+
+test('a payer that pays each invoice at once is still held to its requests a minute', async () => {
+  await serving({ limits: { perPayerPerMinute: 2 } }, async () => {
+    for (const id of ['a', 'b']) {
+      const invoice = await ask(payer, request(id))
+      assert.equal((await ask(payer, garbage(id, invoice?.invoiceId)))?.success, false)
+    }
+    assert.match(String((await ask(payer, request('c')))?.error), /try again in a minute/)
+    assert.equal((await ask(other, request('c')))?.type, 'invoice_response')
+  })
+})
+
+test('requests arriving together are counted before any is invoiced', async () => {
+  let release = (): void => {}
+  const held = new Promise<void>(resolve => { release = resolve })
+  await serving({ screen: async () => { await held; return undefined } }, async () => {
+    const answers = ['a', 'b', 'c', 'd'].map(async id => await ask(payer, request(id)))
+    await new Promise(resolve => setTimeout(resolve, 300))
+    release()
+    const types = (await Promise.all(answers)).map(a => a?.type).sort()
+    assert.deepEqual(types, ['invoice_response', 'invoice_response', 'invoice_response', 'payment_error'])
+  })
+})
+
+test('the invoice expires when its session does', async () => {
+  await serving({ sessionMs: 5000 }, async () => {
+    const invoice = await ask(payer, request('a'))
+    const left = Date.parse(String(invoice?.expiresAt)) - Date.now()
+    assert.ok(left > 3000 && left <= 5000, `expires in ${left} ms`)
+  })
+})
+
+test('a payment after its invoice expired is refused, though no request came since', async () => {
+  await serving({ sessionMs: 200 }, async run => {
+    const invoice = await ask(payer, request('a'))
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const status = await ask(payer, garbage('a', invoice?.invoiceId))
+    assert.equal(status?.type, 'payment_status')
+    assert.equal(status?.error, 'No payment request for this session')
+    assert.equal(run.events.at(-1)?.kind, 'refused')
+  })
+})
+
+test("a payment naming another invoice is refused; the session's own is still taken", async () => {
+  await serving({}, async () => {
+    const invoice = await ask(payer, request('a'))
+    assert.equal((await ask(payer, garbage('a', 'inv_someone_else')))?.error, 'The payment is for another invoice')
+    // Taken, and refused for its BEEF, which is not real.
+    assert.match(String((await ask(payer, garbage('a', invoice?.invoiceId)))?.error), /BEEF/)
+  })
+})
+
 test('unproven parents are broadcast first, the payment last', async () => {
   await serving({}, async run => {
     const r = await pay(new FakeWallet({ unprovenDepth: 2 }))

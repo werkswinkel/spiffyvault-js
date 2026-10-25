@@ -409,8 +409,14 @@ What `acceptLivePayments` does, as the app's payee does:
 
 - Answers `payment_request` with an invoice for the address
   `invoiceAddress` returns, or with `payment_error` when `screen` refuses
-  it. The invoice is held for 60 s.
-- Takes the `beef_payment` only for that invoice and from the same payer.
+  it. The invoice is held for 60 s (`sessionMs`), and its `expiresAt`
+  says so.
+- Takes only so many requests (`limits`, default `PAYEE_LIMITS`): 3 unpaid
+  invoices per payer and 64 in all, 10 requests a minute per payer and 300
+  in all. A request past a limit is answered with `payment_error` (code
+  `busy`) before `screen` or `invoiceAddress` is called.
+- Takes the `beef_payment` only for that invoice and from the same payer,
+  while it is held; any other is answered with a failed `payment_status`.
   It reads the BEEF V1, checks that the outputs to the invoice's address pay
   at least the amount, and checks the transaction by SPV (`chainTracker`).
 - Broadcasts the unproven ancestors, then the payment (`broadcaster`,

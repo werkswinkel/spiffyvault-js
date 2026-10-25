@@ -31,6 +31,28 @@ import { PAYMENT_PROTOCOL } from './live.ts'
 export const PAYEE_SESSION_MS = 60_000
 /** The app's payee cuts a note to this many characters. */
 export const PAYEE_MAX_NOTE = 280
+/**
+ * How many payment requests are taken, as the app's payee takes them:
+ * unpaid invoices held at once, by one payer and by all, and requests a
+ * minute. Each request may cost an address from `invoiceAddress`.
+ */
+export const PAYEE_LIMITS: Readonly<PayeeLimits> = {
+  openPerPayer: 3,
+  open: 64,
+  perPayerPerMinute: 10,
+  perMinute: 300
+}
+
+export interface PayeeLimits {
+  /** Unpaid invoices one payer may hold at once. */
+  openPerPayer: number
+  /** Unpaid invoices all payers together may hold at once. */
+  open: number
+  /** Requests one payer may make a minute. */
+  perPayerPerMinute: number
+  /** Requests all payers together may make a minute. */
+  perMinute: number
+}
 /** Default ARC endpoints, the ones the app broadcasts to (POST <base>/tx). */
 export const DEFAULT_ARC = {
   mainnet: 'https://arc.gorillapool.io/v1',
@@ -100,8 +122,10 @@ export interface LivePayeeOptions {
   /** Return a reason to refuse a request (it is answered with payment_error), or nothing to invoice it. */
   screen?: (request: LiveInvoiceRequest) => string | undefined | Promise<string | undefined>
   onEvent?: (event: LivePayeeEvent) => void
-  /** Default 60 000, as the app. */
+  /** How long an invoice waits for its payment; its expiresAt. Default 60 000, as the app. */
   sessionMs?: number
+  /** Default PAYEE_LIMITS. A request past one is answered with payment_error. */
+  limits?: Partial<PayeeLimits>
   /** For each frame read. Default 30 000. */
   readMs?: number
 }
@@ -133,11 +157,30 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
   const readMs = options.readMs ?? 30_000
   const chainTracker = options.chainTracker ?? new WhatsOnChain(options.network === 'mainnet' ? 'main' : 'test')
   const broadcaster = options.broadcaster ?? arcBroadcaster(options.network)
+  const limits = { ...PAYEE_LIMITS, ...options.limits }
   const event = (e: LivePayeeEvent): void => { try { options.onEvent?.(e) } catch { /* the listener's problem */ } }
 
   const prune = (): void => {
     const cutoff = Date.now() - sessionMs
     for (const [id, s] of sessions) if (s.at < cutoff) sessions.delete(id)
+  }
+
+  // Requests taken in the last minute, and those between the check below
+  // and their invoice, so that requests arriving together all count.
+  const recent: Array<{ payer: string, at: number }> = []
+  const pending = new Map<string, number>()
+  const noRoom = (payer: string): string | undefined => {
+    prune()
+    const minuteAgo = Date.now() - 60_000
+    while (recent.length > 0 && recent[0]!.at < minuteAgo) recent.shift()
+    let open = 0
+    let mine = 0
+    for (const s of sessions.values()) { open++; if (s.request.payerPeerId === payer) mine++ }
+    for (const [p, n] of pending) { open += n; if (p === payer) mine += n }
+    if (open >= limits.open || recent.length >= limits.perMinute) return 'Too many payment requests at once'
+    if (mine >= limits.openPerPayer) return 'Too many payment requests from you at once'
+    if (recent.filter(r => r.payer === payer).length >= limits.perPayerPerMinute) return 'Too many payment requests from you; try again in a minute'
+    return undefined
   }
 
   // One frame each, written with one send(): the Dart reader takes a frame in one read.
@@ -154,6 +197,21 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
     try { amount = BigInt(String(msg.amount)) } catch { amount = undefined }
     if (sessionId === '') { refuse('The request has no session', 'invalidRequest'); return }
     if (amount === undefined || amount <= 0n || amount > BigInt(MAX_AMOUNT_SATS)) { refuse('The amount is not a whole number of satoshis', 'invalidAmount'); return }
+    const full = noRoom(payerPeerId)
+    if (full !== undefined) { refuse(full, 'busy'); return }
+    recent.push({ payer: payerPeerId, at: Date.now() })
+    pending.set(payerPeerId, (pending.get(payerPeerId) ?? 0) + 1)
+    try {
+      await invoice(stream, msg, payerPeerId, sessionId, requestId, amount, refuse)
+    } finally {
+      const n = (pending.get(payerPeerId) ?? 1) - 1
+      if (n > 0) pending.set(payerPeerId, n)
+      else pending.delete(payerPeerId)
+    }
+  }
+
+  const invoice = async (stream: Stream, msg: Record<string, unknown>, payerPeerId: string, sessionId: string,
+    requestId: string, amount: bigint, refuse: (error: string, code: string) => void): Promise<void> => {
     const raw = typeof msg.description === 'string' ? msg.description.trim() : ''
     const note = raw === '' ? undefined : [...raw].slice(0, PAYEE_MAX_NOTE).join('')
     const request: LiveInvoiceRequest = {
@@ -173,8 +231,8 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
       refuse(`No address to be paid to: ${errorText(e)}`, 'walletNone')
       return
     }
-    prune()
-    sessions.set(sessionKey(payerPeerId, sessionId), { request, address, at: Date.now() })
+    const at = Date.now()
+    sessions.set(sessionKey(payerPeerId, sessionId), { request, address, at })
     reply(stream, {
       type: 'invoice_response',
       sessionId,
@@ -182,7 +240,8 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
       invoiceId: request.invoiceId,
       addresses: [address],
       amount: amount.toString(),
-      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      // When the session is dropped: it said an hour, and was gone in a minute.
+      expiresAt: new Date(at + sessionMs).toISOString(),
       network: walletNetworkType(options.network)
     })
     event({ kind: 'request', request })
@@ -191,9 +250,15 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
   const onPayment = async (stream: Stream, msg: Record<string, unknown>, payerPeerId: string): Promise<void> => {
     const sessionId = typeof msg.sessionId === 'string' ? msg.sessionId : ''
     const key = sessionKey(payerPeerId, sessionId)
-    const session = sessions.get(key)
-    // An unknown or expired session answers nothing, as the app's payee does.
-    if (session === undefined || session.request.payerPeerId !== payerPeerId || msg.invoiceId !== session.request.invoiceId) return
+    const refuse = (error: string, request?: LiveInvoiceRequest): void => {
+      reply(stream, { type: 'payment_status', success: false, error, sessionId })
+      event({ kind: 'refused', payerPeerId, reason: error, ...(request !== undefined ? { request } : {}) })
+    }
+    let session = sessions.get(key)
+    // Expired even when no request has come since to prune it.
+    if (session !== undefined && Date.now() - session.at >= sessionMs) { sessions.delete(key); session = undefined }
+    if (session === undefined) { refuse('No payment request for this session'); return }
+    if (msg.invoiceId !== session.request.invoiceId) { refuse('The payment is for another invoice', session.request); return }
     sessions.delete(key)
     const { request, address } = session
     event({ kind: 'checking', request, ...(typeof msg.txid === 'string' ? { txid: msg.txid } : {}) })

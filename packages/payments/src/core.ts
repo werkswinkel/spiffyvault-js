@@ -77,10 +77,10 @@ export {
 } from './live/live.ts'
 export type { LivePayParams, LivePayContext, LiveTimeouts } from './live/live.ts'
 export {
-  acceptLivePayments, arcBroadcaster, isReachable, waitUntilReachable, unprovenChain, DEFAULT_ARC, PAYEE_SESSION_MS, PAYEE_MAX_NOTE
+  acceptLivePayments, arcBroadcaster, isReachable, waitUntilReachable, unprovenChain, DEFAULT_ARC, PAYEE_SESSION_MS, PAYEE_MAX_NOTE, PAYEE_LIMITS
 } from './live/payee.ts'
 export type {
-  LivePayee, LivePayeeOptions, LivePayeeEvent, LiveInvoiceRequest, ReceivedLivePayment, Broadcaster, BroadcastResult, ArcOptions
+  LivePayee, LivePayeeOptions, LivePayeeEvent, PayeeLimits, LiveInvoiceRequest, ReceivedLivePayment, Broadcaster, BroadcastResult, ArcOptions
 } from './live/payee.ts'
 export { encodeOnFrame, decodeOnFrame, readOnFrame, openFrameReader, frameLength, FrameError, FRAME_HEADER, PAYMENT_PROTOCOL_ID, DEFAULT_MAX_INBOUND_FRAME_BYTES } from './live/frame.ts'
 export type { FrameReadOptions } from './live/frame.ts'
