@@ -1,8 +1,12 @@
 /**
  * An example site with Sign in with SpiffyVault: plain node:http, sessions
- * in memory. Run `npm run example`, or with `HOST=192.168.1.5` (this
- * computer's address on the network) so a phone on the same network can
- * reach the callback, then open http://<HOST>:8787/ and scan.
+ * in memory. Run `npm run example` and open http://localhost:8787/.
+ *
+ * A phone must reach the callback over HTTPS (Android refuses plain HTTP),
+ * so for a real phone put the site behind a tunnel and say where:
+ *
+ *   cloudflared tunnel --url http://localhost:8787     (prints https://….trycloudflare.com)
+ *   PUBLIC_URL=https://….trycloudflare.com npm run example
  *
  * Endpoints: POST /sign-in/start (sets the browser cookie), GET
  * /sign-in/poll, POST /sign-in/callback (the app), GET /sign-in/return
@@ -37,13 +41,17 @@ function send (res: ServerResponse, status: number, value: unknown, headers: Rec
   res.end(JSON.stringify(value))
 }
 
-export async function startExampleSite (opts: { host?: string, port?: number } = {}): Promise<ExampleSite> {
-  const host = opts.host ?? 'localhost'
+/**
+ * Serves on 127.0.0.1. `publicUrl`: the https address a tunnel gives the
+ * site; the challenges then name its host as the domain.
+ */
+export async function startExampleSite (opts: { port?: number, publicUrl?: string } = {}): Promise<ExampleSite> {
   const server: Server = createServer()
-  await new Promise<void>(resolve => server.listen(opts.port ?? 0, host === 'localhost' ? '127.0.0.1' : '0.0.0.0', resolve))
+  await new Promise<void>(resolve => server.listen(opts.port ?? 0, '127.0.0.1', resolve))
   const port = (server.address() as { port: number }).port
-  const origin = `http://${host}:${port}`
-  const site = new SignInSite({ domain: host, callback: `${origin}/sign-in/callback`, name: 'Example Site', returnBase: `${origin}/sign-in/return` })
+  const origin = opts.publicUrl !== undefined ? new URL(opts.publicUrl).origin : `http://localhost:${port}`
+  const domain = new URL(origin).hostname
+  const site = new SignInSite({ domain, callback: `${origin}/sign-in/callback`, name: 'Example Site', returnBase: `${origin}/sign-in/return` })
   const sessions = new Map<string, string>()
 
   const script = (await build({
@@ -103,6 +111,6 @@ export async function startExampleSite (opts: { host?: string, port?: number } =
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const s = await startExampleSite({ host: process.env.HOST ?? 'localhost', port: Number(process.env.PORT ?? 8787) })
-  console.log(`Example site at ${s.url}/  (add ?mode=code or ?mode=return to choose)`)
+  const s = await startExampleSite({ port: Number(process.env.PORT ?? 8787), ...(process.env.PUBLIC_URL !== undefined ? { publicUrl: process.env.PUBLIC_URL } : {}) })
+  console.log(`Example site at ${s.url}/  (add ?mode=code or ?mode=return to choose; domain ${s.site.domain})`)
 }

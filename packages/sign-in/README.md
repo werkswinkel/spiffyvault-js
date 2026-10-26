@@ -61,10 +61,17 @@ It chooses the QR code on a computer and the button on a phone; pass
 
 ## Example
 
-`npm run example` serves `examples/site.ts` at http://localhost:8787/. To
-try it with a phone, run it with this computer's network address, for
-example `HOST=192.168.1.5 npm run example`, and open
-http://192.168.1.5:8787/ in a browser.
+`npm run example` serves `examples/site.ts` at http://localhost:8787/.
+A phone must reach the callback over HTTPS (Android refuses plain HTTP),
+so to try it with a phone, put it behind a tunnel:
+
+```sh
+cloudflared tunnel --url http://localhost:8787    # prints https://….trycloudflare.com
+PUBLIC_URL=https://….trycloudflare.com npm run example
+```
+
+Open the https address on a computer to scan, or on the phone to sign in
+there.
 
 ## What it defends against
 
