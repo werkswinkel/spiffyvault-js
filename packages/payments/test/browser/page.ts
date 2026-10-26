@@ -3,7 +3,7 @@
  * window.liveFlow() / window.offlineFlow() and check what they return.
  */
 
-import { RicochetClient } from '@stephanfeb/ricochet/core'
+import { RicochetClient } from '@go-ricochet/ricochet/core'
 import type { WalletInterface } from '@bsv/sdk'
 import { createPaymentNode, payLive, payOffline, isPaymentError } from '../../src/browser.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'

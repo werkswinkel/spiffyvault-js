@@ -22,7 +22,7 @@
  * PeerPay: only the payee's signature ties its key to the peer ID.
  */
 
-import type { Ed25519PrivateKeyLike } from '@stephanfeb/ricochet/core'
+import type { Ed25519PrivateKeyLike } from '@go-ricochet/ricochet/core'
 import { checkPayeeDomain } from './domain.ts'
 import type { DomainFetch } from './domain.ts'
 import { DomainError, LinkChangedError, LinkError, PaymentError, isPaymentError } from './errors.ts'

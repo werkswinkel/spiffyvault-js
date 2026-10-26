@@ -15,8 +15,8 @@
  * A failure before the mailbox took the message aborts the wallet action.
  */
 
-import { NoServerError } from '@stephanfeb/ricochet/core'
-import type { Ed25519PrivateKeyLike } from '@stephanfeb/ricochet/core'
+import { NoServerError } from '@go-ricochet/ricochet/core'
+import type { Ed25519PrivateKeyLike } from '@go-ricochet/ricochet/core'
 import { fetchAnchor } from './anchor.ts'
 import { equalBytes, toHex, utf8, uuidV4 } from './bytes.ts'
 import { deriveOfflineDestination } from './destination.ts'

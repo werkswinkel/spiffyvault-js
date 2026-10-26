@@ -4,7 +4,7 @@
  */
 
 // #region node-imports
-import { RicochetClient } from '@stephanfeb/ricochet/node'
+import { RicochetClient } from '@go-ricochet/ricochet/node'
 import { SPIFFYVAULT_RICOCHET, createPaymentNode, pay } from '@spiffyvault/payments/node'
 import type { WalletInterface } from '@bsv/sdk'
 // #endregion

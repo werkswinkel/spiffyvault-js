@@ -8,7 +8,7 @@
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { WalletInterface } from '@bsv/sdk'
-import { createRicochetNode } from '@stephanfeb/ricochet/node'
+import { createRicochetNode } from '@go-ricochet/ricochet/node'
 import type { Libp2p } from '@libp2p/interface'
 import { formatPaymentLink } from '../../src/node.ts'
 import { nodePay } from '../../examples/node.ts'

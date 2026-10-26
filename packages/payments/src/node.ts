@@ -13,11 +13,11 @@ import { identify, identifyPush } from '@libp2p/identify'
 import { ping } from '@libp2p/ping'
 import { webSockets } from '@libp2p/websockets'
 // The package root registers the udx multiaddr codec and brings the transport (Node.js 22).
-import { udx } from '@stephanfeb/libp2p-udx'
+import { udx } from '@go-ricochet/libp2p-udx'
 import { createLibp2p } from 'libp2p'
 import { multiaddr } from '@multiformats/multiaddr'
 import type { Libp2p, PrivateKey } from '@libp2p/interface'
-import { resolveDnsAddrs } from '@stephanfeb/ricochet/node'
+import { resolveDnsAddrs } from '@go-ricochet/ricochet/node'
 import { SPIFFYVAULT_RICOCHET } from './networks.ts'
 
 export { resolveDnsAddrs }

@@ -78,8 +78,8 @@
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
-    "@stephanfeb/libp2p-udx": "0.1.1",
-    "@stephanfeb/ricochet": "file:../../../ricochet-js/packages/ricochet",
+    "@go-ricochet/libp2p-udx": "0.1.1",
+    "@go-ricochet/ricochet": "0.1.0",
     "libp2p": "3.5.1"
   },
   "devDependencies": {

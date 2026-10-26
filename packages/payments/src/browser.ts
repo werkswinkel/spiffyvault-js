@@ -7,7 +7,7 @@
 
 // First: Ricochet and the phones advertise /udx addresses; without the codec
 // js-libp2p's identify fails with "Protocol 768 was unknown". Browser-safe.
-import '@stephanfeb/libp2p-udx/multiaddr'
+import '@go-ricochet/libp2p-udx/multiaddr'
 
 import { noise } from '@chainsafe/libp2p-noise'
 import { yamux } from '@chainsafe/libp2p-yamux'

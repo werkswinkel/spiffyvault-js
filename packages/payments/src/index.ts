@@ -9,6 +9,6 @@
  * ./browser or ./node instead, which add createPaymentNode().
  */
 
-import '@stephanfeb/libp2p-udx/multiaddr'
+import '@go-ricochet/libp2p-udx/multiaddr'
 
 export * from './core.ts'

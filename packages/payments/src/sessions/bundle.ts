@@ -7,7 +7,7 @@
  */
 
 import { ed25519 } from '@noble/curves/ed25519.js'
-import { NoServerError, ProtocolError } from '@stephanfeb/ricochet/core'
+import { NoServerError, ProtocolError } from '@go-ricochet/ricochet/core'
 import { concat, equalBytes, readU32be, u32be } from '../bytes.ts'
 import { PaymentError, errorText } from '../errors.ts'
 import { PEER_BUNDLE_FOLDER, forNetwork } from '../networks.ts'

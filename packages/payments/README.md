@@ -24,7 +24,7 @@ Version 0.1.0 is not on npm. Node.js 22.18 or later. ESM only.
 | `@spiffyvault/payments/node` | Node.js, Electron main | `createPaymentNode()`: UDX, WebSockets and the circuit relay transport; `resolveDnsAddrs()` |
 | `@spiffyvault/payments` (core) | Any, with your own libp2p node | Nothing platform-specific |
 
-The package uses `@stephanfeb/ricochet` for the Ricochet server (offline
+The package uses `@go-ricochet/ricochet` for the Ricochet server (offline
 path), `@bsv/sdk` for transactions and keys, and
 `@bsv/message-box-client` for PeerPay. The browser entry has no Node.js code.
 
@@ -32,7 +32,7 @@ path), `@bsv/sdk` for transactions and keys, and
 
 <!-- example: examples/node.ts#node-imports -->
 ```ts
-import { RicochetClient } from '@stephanfeb/ricochet/node'
+import { RicochetClient } from '@go-ricochet/ricochet/node'
 import { SPIFFYVAULT_RICOCHET, createPaymentNode, pay } from '@spiffyvault/payments/node'
 import type { WalletInterface } from '@bsv/sdk'
 ```
@@ -68,7 +68,7 @@ UDX dials IP addresses only: use `SPIFFYVAULT_RICOCHET.udxIp`, or
 
 <!-- example: examples/browser.ts#browser-imports -->
 ```ts
-import { RicochetClient } from '@stephanfeb/ricochet/browser'
+import { RicochetClient } from '@go-ricochet/ricochet/browser'
 import { SPIFFYVAULT_RICOCHET, createPaymentNode, pay } from '@spiffyvault/payments/browser'
 import type { WalletInterface } from '@bsv/sdk'
 ```
@@ -468,7 +468,7 @@ app that is to be paid by PeerPay needs the key too.
 | A wallet you just funded says WhatsOnChain has no transaction | Indexer lag (see [Funding](#funding)) | Retry for some seconds |
 | A mailbox payment is collected but never reaches the network | Its coins were spent again before the payee broadcast it (see [Funding](#funding)) | Hold inputs until `abort()`; one payment at a time |
 | The app will not pay a link with only `k`: no BRC-100 identity found | The paying app has no BRC-100 payment key | Set it up in the app ([Receiving PeerPay](#receiving-peerpay-without-a-brc-100-wallet)) |
-| `identify` or the reservation fails in a browser with "Protocol 768 was unknown" | The `/udx` multiaddr codec is not registered | Import from `@spiffyvault/payments/browser`, which registers it, or `import '@stephanfeb/libp2p-udx/multiaddr'` first |
+| `identify` or the reservation fails in a browser with "Protocol 768 was unknown" | The `/udx` multiaddr codec is not registered | Import from `@spiffyvault/payments/browser`, which registers it, or `import '@go-ricochet/libp2p-udx/multiaddr'` first |
 
 ## What the library does, and does not do
 

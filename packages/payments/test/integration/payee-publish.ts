@@ -7,8 +7,8 @@
  */
 
 import { PrivateKey } from '@bsv/sdk'
-import { RicochetClient } from '@stephanfeb/ricochet/node'
-import type { RicochetNode } from '@stephanfeb/ricochet/node'
+import { RicochetClient } from '@go-ricochet/ricochet/node'
+import type { RicochetNode } from '@go-ricochet/ricochet/node'
 import { anchorRecordJson, forNetwork, randomBytes } from '../support/internals.ts'
 import type { Network } from '../../src/index.ts'
 import { identityFromSeed, publishSessionKeys, signAnchorRecord } from '../support/payee.ts'

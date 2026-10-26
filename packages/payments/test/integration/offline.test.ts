@@ -8,7 +8,7 @@
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { WalletInterface } from '@bsv/sdk'
-import { RicochetClient, createRicochetNode } from '@stephanfeb/ricochet/node'
+import { RicochetClient, createRicochetNode } from '@go-ricochet/ricochet/node'
 import type { Libp2p } from '@libp2p/interface'
 import { createPaymentNode, payOffline, fetchBundle, PaymentError } from '../../src/node.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'

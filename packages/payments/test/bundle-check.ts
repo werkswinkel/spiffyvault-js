@@ -28,14 +28,14 @@ for (const entry of ['browser', 'index']) {
   const imports = Object.values(result.metafile.inputs).flatMap(i => i.imports.map(x => x.path))
   const nodeImports = imports.filter(p => builtins.has(p) || p.startsWith('node:'))
   const inputs = Object.keys(result.metafile.inputs)
-  const udxRoot = inputs.filter(p => (p.includes('@stephanfeb/libp2p-udx/') && !p.endsWith('/multiaddr.js')) || p.includes('@stephanfeb/udx/'))
+  const udxRoot = inputs.filter(p => (p.includes('@go-ricochet/libp2p-udx/') && !p.endsWith('/multiaddr.js')) || p.includes('@go-ricochet/udx/'))
   const toolbox = inputs.filter(p => p.includes('@bsv/wallet-toolbox'))
   const bytes = result.outputFiles[0]!.contents.length
   console.log(`${entry}: platform=browser, no externals, ${inputs.length} inputs, ${(bytes / 1024).toFixed(0)} KiB`)
   if (nodeImports.length > 0) { console.log(`  FAIL: Node built-ins: ${nodeImports.join(', ')}`); failed = true }
   if (udxRoot.length > 0) { console.log(`  FAIL: UDX transport code: ${udxRoot.join(', ')}`); failed = true }
   if (toolbox.length > 0) { console.log(`  FAIL: wallet-toolbox code: ${toolbox.slice(0, 5).join(', ')}`); failed = true }
-  if (!inputs.some(p => p.endsWith('@stephanfeb/libp2p-udx/dist/multiaddr.js'))) { console.log('  FAIL: UDX codec registration missing'); failed = true }
+  if (!inputs.some(p => p.endsWith('@go-ricochet/libp2p-udx/dist/multiaddr.js'))) { console.log('  FAIL: UDX codec registration missing'); failed = true }
 }
 
 const node = await build({

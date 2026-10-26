@@ -33,7 +33,7 @@ import { Hash, PrivateKey, Utils } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
 import { Setup } from '@bsv/wallet-toolbox'
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys'
-import { RicochetClient } from '@stephanfeb/ricochet/node'
+import { RicochetClient } from '@go-ricochet/ricochet/node'
 import {
   SPIFFYVAULT_RICOCHET, createPaymentNode, dialPayee, fetchAnchor, fetchBundle, isPaymentError, pay, payLive, payOffline,
   payViaPeerPay, planPayment, resolveDnsAddrs

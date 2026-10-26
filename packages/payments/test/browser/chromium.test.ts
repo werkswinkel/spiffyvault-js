@@ -12,7 +12,7 @@
 
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { RicochetClient, createRicochetNode } from '@stephanfeb/ricochet/node'
+import { RicochetClient, createRicochetNode } from '@go-ricochet/ricochet/node'
 import type { Libp2p } from '@libp2p/interface'
 import { startServer } from '../integration/server.ts'
 import type { TestServer } from '../integration/server.ts'

@@ -3,7 +3,7 @@
  */
 
 // #region browser-imports
-import { RicochetClient } from '@stephanfeb/ricochet/browser'
+import { RicochetClient } from '@go-ricochet/ricochet/browser'
 import { SPIFFYVAULT_RICOCHET, createPaymentNode, pay } from '@spiffyvault/payments/browser'
 import type { WalletInterface } from '@bsv/sdk'
 // #endregion
