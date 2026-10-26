@@ -141,7 +141,7 @@ test('pay() pays a link its domain vouches for, and says which domain and name',
   const keys = { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map([[5, randomBytes(32)]]) }
   const anchor = anchorKey()
   const server = new MemRicochet(id.peerId)
-  server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType: 'test', timestamp: 1 })))
+  server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType: 'test', timestamp: 1, path: 'wallet/payment-anchor' })))
   await publishSessionKeys(server.as(id.peerId), id, keys)
   const payer = await identityFromSeed(fill(1))
   const file = domainFileText([await domainEntry({ domain: 'shop.example', peerId: id.peerId, networks: ['testnet'], name: 'Corner Shop' }, id.libp2pKey)])

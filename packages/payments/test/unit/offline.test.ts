@@ -18,8 +18,9 @@ async function world (opts: { network?: 'test' | 'main', anchorPath?: string, bu
   const server = new MemRicochet(id.peerId)
   const networkType = opts.network ?? 'test'
   const suffix = networkType === 'main' ? '/mainnet' : ''
-  server.putDoc(id.peerId, opts.anchorPath ?? `wallet/payment-anchor${suffix}`,
-    anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType, timestamp: Date.now() })))
+  const anchorPath = opts.anchorPath ?? `wallet/payment-anchor${suffix}`
+  server.putDoc(id.peerId, anchorPath,
+    anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType, timestamp: Date.now(), path: anchorPath })))
   const network = networkType === 'main' ? 'mainnet' : 'testnet'
   if (opts.bundle !== false) {
     // two bundles; the last one counts

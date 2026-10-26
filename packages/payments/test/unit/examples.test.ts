@@ -23,7 +23,7 @@ test('README: reading a link', async () => {
 test('README: per-path calls', async () => {
   const id = await identityFromSeed(randomBytes(32))
   const server = new MemRicochet(id.peerId)
-  server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchorKey().pub, epoch: 0, networkType: 'test', timestamp: 1 })))
+  server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchorKey().pub, epoch: 0, networkType: 'test', timestamp: 1, path: 'wallet/payment-anchor' })))
   await publishSessionKeys(server.as(id.peerId), id, { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map() })
   const sent: string[] = []
   const payer = await identityFromSeed(fill(4))

@@ -50,8 +50,8 @@ export type { RicochetLike } from './ricochet.ts'
 export { toHex, fromHex, toBase64, fromBase64, utf8, fromUtf8 } from './bytes.ts'
 
 export {
-  anchorContextHex, anchorSignaturePayload, parseAnchorRecord, anchorRecordJson, verifyAnchorRecord, anchorPaths, fetchAnchor,
-  ANCHOR_RECORD_VERSION
+  anchorContextHex, anchorSignaturePayload, anchorSignedText, parseAnchorRecord, anchorRecordJson, verifyAnchorRecord, anchorPaths,
+  fetchAnchor, ANCHOR_RECORD_VERSION, ANCHOR_RECORD_LIFETIME_MS
 } from './anchor.ts'
 export type { AnchorRecord, AnchorLookup, FetchedAnchor } from './anchor.ts'
 

@@ -1,0 +1,216 @@
+{
+  "identitySeed": "0707070707070707070707070707070707070707070707070707070707070707",
+  "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+  "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+  "contexts": {
+    "test": {
+      "offlineEpoch0": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+      "offlineEpoch1": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000001",
+      "brc100": "7370696666797661756c742f6272633130302d6964656e7469747900ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "main": {
+      "offlineEpoch0": "6f7665726e6f64652f6f66666c696e652d7061796d656e74732f6d61696e6e657400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+      "offlineEpoch1": "6f7665726e6f64652f6f66666c696e652d7061796d656e74732f6d61696e6e657400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000001",
+      "brc100": "7370696666797661756c742f6272633130302d6964656e746974792f6d61696e6e657400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "regtest": {
+      "offlineEpoch0": "6f7665726e6f64652f6f66666c696e652d7061796d656e74732f7265677465737400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+      "offlineEpoch1": "6f7665726e6f64652f6f66666c696e652d7061796d656e74732f7265677465737400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000001",
+      "brc100": "7370696666797661756c742f6272633130302d6964656e746974792f7265677465737400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    }
+  },
+  "records": {
+    "usual, testnet": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor",
+      "checkedAt": 1793086400000,
+      "signedText": "overnode/payment-anchor-record\nversion=3\npeerId=12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7\nidentityPublicKey=ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c\nanchorPublicKey=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\nanchorContext=6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000\nepoch=0\nnetworkType=test\npath=wallet/payment-anchor\ntimestamp=1793000000000\nexpiresAt=1800776000000"
+    },
+    "one wallet, mainnet, epoch 1": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e74732f6d61696e6e657400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000001",
+        "epoch": 1,
+        "networkType": "main",
+        "path": "wallet/payment-anchor/mainnet/w/w1",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "60d12add6204f87e0a66851b1e0571fd7d60a46a9ff5ab5e5a15fbdd84e83f7c31e72f0149476cdf4c712a828fa9fa66c2d9a425e726078d988bf139fa4e1e01"
+      },
+      "network": "main",
+      "readAt": "wallet/payment-anchor/mainnet/w/w1",
+      "checkedAt": 1793086400000,
+      "signedText": "overnode/payment-anchor-record\nversion=3\npeerId=12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7\nidentityPublicKey=ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c\nanchorPublicKey=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\nanchorContext=6f7665726e6f64652f6f66666c696e652d7061796d656e74732f6d61696e6e657400ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000001\nepoch=1\nnetworkType=main\npath=wallet/payment-anchor/mainnet/w/w1\ntimestamp=1793000000000\nexpiresAt=1800776000000"
+    }
+  },
+  "refused": {
+    "version 2": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 2,
+        "signature": "e80079c451a3a16b2651028cf9d259d2d21f8444b93b63ae5aa9d7b68591a3425877b2315b8ebfde0538821f0ea811e6ae7ffdd62fb0638c20581e3ebd759e01"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor",
+      "checkedAt": 1793086400000,
+      "because": "unsupported record version"
+    },
+    "read at another path": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor/w/w1",
+      "checkedAt": 1793086400000,
+      "because": "read at"
+    },
+    "path changed after signing": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor/w/w1",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor/w/w1",
+      "checkedAt": 1793086400000,
+      "because": "signature does not verify"
+    },
+    "expired": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor",
+      "checkedAt": 1800776000000,
+      "because": "expired"
+    },
+    "expiry moved after signing": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800862400000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor",
+      "checkedAt": 1800776000000,
+      "because": "signature does not verify"
+    },
+    "mainnet record with the testnet context": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "main",
+        "path": "wallet/payment-anchor/mainnet",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "8f227e5346cf63ffd5b45a3c09310ef8a7fee6afbdc2c9c79665649c729b4a25114f8190fea2ceb0a922fd173442e88487f8239885c782d7ba06bbafaa058307"
+      },
+      "network": "main",
+      "readAt": "wallet/payment-anchor/mainnet",
+      "checkedAt": 1793086400000,
+      "because": "anchor context"
+    },
+    "for another network": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "main",
+      "readAt": "wallet/payment-anchor",
+      "checkedAt": 1793086400000,
+      "because": "network"
+    },
+    "another anchor key after signing": {
+      "record": {
+        "peerId": "12D3KooWRawPbxPtP1eZaJpumGnyWX2DcUyd3RQnydr3eAto4Az7",
+        "identityPublicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+        "anchorPublicKey": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        "anchorContextHex": "6f7665726e6f64652f6f66666c696e652d7061796d656e747300ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00000000",
+        "epoch": 0,
+        "networkType": "test",
+        "path": "wallet/payment-anchor",
+        "timestamp": 1793000000000,
+        "expiresAt": 1800776000000,
+        "version": 3,
+        "signature": "20b34136aa00f39d703082b8e2cc69a6a112654b68160323150e34ee9aaf01a46426aadd044275bef51464e006661e9cbbc4423e3dca7eab1c0579900cd8f504"
+      },
+      "network": "test",
+      "readAt": "wallet/payment-anchor",
+      "checkedAt": 1793086400000,
+      "because": "signature does not verify"
+    }
+  }
+}

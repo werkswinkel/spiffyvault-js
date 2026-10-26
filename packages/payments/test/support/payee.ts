@@ -15,7 +15,7 @@ import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 import type { PrivateKey as Libp2pPrivateKey } from '@libp2p/interface'
 import { PrivateKey } from '@bsv/sdk'
 import {
-  PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER, anchorContextHex, anchorSignaturePayload, concat, encodeBundle, encodeOneTimeKeyItem,
+  ANCHOR_RECORD_LIFETIME_MS, ANCHOR_RECORD_VERSION, PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER, anchorContextHex, anchorSignaturePayload, concat, encodeBundle, encodeOneTimeKeyItem,
   equalBytes, forNetwork, oneTimeKeySignedBytes, readU32be, toHex, utf8
 } from './internals.ts'
 import type { AnchorRecord, Network, PreKeyBundle, RicochetLike } from '../../src/index.ts'
@@ -50,16 +50,18 @@ export async function identityFromSeed (seed: Uint8Array): Promise<PayeeIdentity
   }
 }
 
-export function signAnchorRecord (id: PayeeIdentity, r: { anchorPublicKey: string, epoch: number, networkType: string, timestamp: number }): AnchorRecord {
+export function signAnchorRecord (id: PayeeIdentity, r: { anchorPublicKey: string, epoch: number, networkType: string, timestamp: number, path: string, expiresAt?: number }): AnchorRecord {
   const unsigned = {
     peerId: id.peerId,
     identityPublicKey: toHex(id.edPublic),
     anchorPublicKey: r.anchorPublicKey,
-    anchorContextHex: anchorContextHex(toHex(id.edPublic), r.epoch),
+    anchorContextHex: anchorContextHex(toHex(id.edPublic), r.epoch, r.networkType),
     epoch: r.epoch,
     networkType: r.networkType,
+    path: r.path,
     timestamp: r.timestamp,
-    version: 2
+    expiresAt: r.expiresAt ?? Date.now() + ANCHOR_RECORD_LIFETIME_MS,
+    version: ANCHOR_RECORD_VERSION
   }
   return { ...unsigned, signature: toHex(ed25519.sign(anchorSignaturePayload(unsigned), id.seed)) }
 }

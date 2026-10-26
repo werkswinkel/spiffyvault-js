@@ -27,8 +27,9 @@ export async function publishPayee (node: RicochetNode, id: PayeeIdentity, serve
   const anchor = PrivateKey.fromRandom()
   await publishSessionKeys(client, id, keys, network)
   const networkType = network === 'mainnet' ? 'main' : network === 'regtest' ? 'regtest' : 'test'
-  const record = signAnchorRecord(id, { anchorPublicKey: anchor.toPublicKey().toString(), epoch: 0, networkType, timestamp: Date.now() })
-  await client.putDocument(id.peerId, forNetwork('wallet/payment-anchor', network), anchorRecordJson(record), { contentType: 'application/json', visibility: 'public' })
+  const path = forNetwork('wallet/payment-anchor', network)
+  const record = signAnchorRecord(id, { anchorPublicKey: anchor.toPublicKey().toString(), epoch: 0, networkType, timestamp: Date.now(), path })
+  await client.putDocument(id.peerId, path, anchorRecordJson(record), { contentType: 'application/json', visibility: 'public' })
   return { id, keys, anchor, client }
 }
 

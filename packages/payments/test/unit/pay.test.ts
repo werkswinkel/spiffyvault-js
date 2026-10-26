@@ -25,7 +25,7 @@ async function payee (anchorPath = 'wallet/payment-anchor') {
   const keys = { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map([[5, randomBytes(32)]]) }
   const anchor = anchorKey()
   const server = new MemRicochet(id.peerId)
-  server.putDoc(id.peerId, anchorPath, anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType: 'test', timestamp: 1 })))
+  server.putDoc(id.peerId, anchorPath, anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType: 'test', timestamp: 1, path: anchorPath })))
   await publishSessionKeys(server.as(id.peerId), id, keys)
   const payer = await identityFromSeed(fill(1))
   const ricochet = server.as(payer.peerId)

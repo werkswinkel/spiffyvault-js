@@ -1,16 +1,18 @@
 /**
- * Byte compatibility with the app: every value of Appendix C reproduced
- * (the identity and the anchor record; peer sessions are peer-sessions.test.ts).
+ * Byte compatibility with the app: the identity of Appendix C and the
+ * app's anchor vectors (peer sessions are peer-sessions.test.ts).
  */
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PrivateKey } from '@bsv/sdk'
+import { readFileSync } from 'node:fs'
+import { sha256 } from '@noble/hashes/sha2.js'
 import {
-  anchorContextHex, anchorRecordJson, anchorSignaturePayload, deriveOfflineDestination, parseAnchorRecord, toHex, verifyAnchorRecord
+  anchorContextHex, anchorRecordJson, anchorSignedText, deriveOfflineDestination, parseAnchorRecord, toHex, utf8, verifyAnchorRecord
 } from '../support/internals.ts'
 import { C } from '../fixtures/appendix-c.ts'
-import { identityFromPhrase, signAnchorRecord } from '../support/payee.ts'
+import { identityFromPhrase } from '../support/payee.ts'
 
 test('identity from the abandon…about phrase: PBKDF2 seed, Ed25519, peer ID', async () => {
   const id = await identityFromPhrase(C.phrase)
@@ -19,21 +21,40 @@ test('identity from the abandon…about phrase: PBKDF2 seed, Ed25519, peer ID', 
   assert.equal(id.peerId, C.peerId)
 })
 
-test('anchor record: context, signed digest, record JSON, verification', async () => {
-  const id = await identityFromPhrase(C.phrase)
-  assert.equal(anchorContextHex(C.ed25519Public, 0), C.anchorContextHex)
-  const rec = signAnchorRecord(id, { anchorPublicKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', epoch: 0, networkType: 'test', timestamp: 1760000000000 })
-  assert.equal(toHex(anchorSignaturePayload(rec)), C.anchorPayloadSha256)
-  assert.equal(anchorRecordJson(rec), C.anchorRecordJson)
-  const parsed = parseAnchorRecord(JSON.parse(C.anchorRecordJson))
-  assert.equal(verifyAnchorRecord(parsed, C.peerId, 'test'), null)
-  assert.match(verifyAnchorRecord(parsed, C.peerId, 'main')!, /network test, not main/)
-  assert.match(verifyAnchorRecord({ ...parsed, timestamp: 1 }, C.peerId, 'test')!, /signature/)
-  assert.match(verifyAnchorRecord({ ...parsed, epoch: 1 }, C.peerId, 'test')!, /anchor context/)
-  assert.match(verifyAnchorRecord({ ...parsed, version: 1 }, C.peerId, 'test')!, /version 1/)
-  assert.match(verifyAnchorRecord(parsed, '12D3KooWJfrcqqdoAcKUjAB6dGkC9KHCsTG5WKHZH8hk1wLs67it', 'test')!, /names peer/)
-  assert.match(verifyAnchorRecord({ ...parsed, anchorPublicKey: '04' + parsed.anchorPublicKey.slice(2) }, C.peerId, 'test')!, /signature|compressed/)
+// The app's master copy (test/vectors/payment_anchor_v3.json), checked
+// against the hash written next to it.
+const anchorText = readFileSync(new URL('../fixtures/payment_anchor_v3.json', import.meta.url), 'utf8')
+const A = JSON.parse(anchorText)
+
+test('anchor vectors: the file is the one its hash names', () => {
+  const written = readFileSync(new URL('../fixtures/payment_anchor_v3.json.sha256', import.meta.url), 'utf8').trim()
+  assert.equal(toHex(sha256(utf8(anchorText))), written)
 })
+
+test('anchor contexts: testnet keeps its own, mainnet and regtest name the network', () => {
+  for (const [network, c] of Object.entries(A.contexts as Record<string, Record<string, string>>)) {
+    assert.equal(anchorContextHex(A.identityPublicKey, 0, network), c.offlineEpoch0)
+    assert.equal(anchorContextHex(A.identityPublicKey, 1, network), c.offlineEpoch1)
+  }
+})
+
+const check = (c: { record: unknown, network: string, readAt: string, checkedAt: number }): string | null =>
+  verifyAnchorRecord(parseAnchorRecord(c.record), A.peerId, c.network, c.readAt, c.checkedAt)
+
+for (const [name, c] of Object.entries(A.records as Record<string, { record: unknown, network: string, readAt: string, checkedAt: number, signedText: string }>)) {
+  test(`anchor record verifies: ${name}`, () => {
+    assert.equal(check(c), null)
+    const record = parseAnchorRecord(c.record)
+    assert.equal(anchorSignedText(record), c.signedText)
+    assert.equal(anchorRecordJson(record), JSON.stringify(c.record))
+  })
+}
+
+for (const [name, c] of Object.entries(A.refused as Record<string, { record: unknown, network: string, readAt: string, checkedAt: number, because: string }>)) {
+  test(`anchor record refused: ${name}`, () => {
+    assert.ok(check(c)?.includes(c.because), `${check(c)} does not say ${c.because}`)
+  })
+}
 
 test('BRC-42 offline destination: the go-sdk BRC-29 pin libspiffy tests', () => {
   // libspiffy test/crypto/type42_brc29_test.dart:22-30
