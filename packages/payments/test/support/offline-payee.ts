@@ -7,7 +7,7 @@
  */
 
 import { P2PKH, PrivateKey, PublicKey, Transaction } from '@bsv/sdk'
-import type { PayeeIdentity, PayeePrekeys } from './payee.ts'
+import type { PayeeIdentity, PayeeSessionKeys } from './payee.ts'
 import { openPreKeyMessage } from './payee.ts'
 import { fromHex, fromUtf8, inspectBeefV1, parseOfflineMessage } from './internals.ts'
 import type { OfflinePaymentMessage } from '../../src/index.ts'
@@ -18,9 +18,9 @@ export interface Collected {
   txid: string
 }
 
-export function collectOfflinePayment (id: PayeeIdentity, keys: PayeePrekeys, anchorPriv: PrivateKey,
+export function collectOfflinePayment (id: PayeeIdentity, keys: PayeeSessionKeys, anchorPriv: PrivateKey,
   envelope: { senderPeerId: string, payload: Uint8Array }): Collected {
-  const message = parseOfflineMessage(JSON.parse(fromUtf8(openPreKeyMessage(id, keys, envelope.payload))))
+  const message = parseOfflineMessage(JSON.parse(fromUtf8(openPreKeyMessage(id, keys, envelope.payload, envelope.senderPeerId))))
   if (message.senderPeerId !== envelope.senderPeerId) throw new Error('inner sender is not the envelope sender')
   const beef = fromHex(message.beefHex)
   const info = inspectBeefV1(beef) // V1, subject last, no txid-only entries

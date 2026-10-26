@@ -5,4 +5,4 @@
 
 import type { RicochetClient } from '@stephanfeb/ricochet/core'
 
-export type RicochetLike = Pick<RicochetClient, 'peerId' | 'getDocument' | 'retrievePage' | 'sendMessage'>
+export type RicochetLike = Pick<RicochetClient, 'peerId' | 'getDocument' | 'retrievePage' | 'sendMessage' | 'claimMessage'>

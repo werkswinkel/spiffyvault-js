@@ -8,7 +8,7 @@ its payment paths:
 | Path | How | Who broadcasts |
 |---|---|---|
 | Live | A libp2p stream `/overnode/payment/1.0.0` to the payee's phone, through the Ricochet server's circuit relay. The phone makes an invoice and checks the payment by SPV. | The payee |
-| Offline | The payment, sealed with the app's Signal-style encryption, is left in the payee's Ricochet mailbox. The phone collects it later. | The payee |
+| Offline | The payment, sealed as the first message of a new X3DH and Double Ratchet session (the app's peer-session format), is left in the payee's Ricochet mailbox. The phone collects it later. | The payee |
 | PeerPay | A standard BRC-29 PeerPay token on a MessageBox server (BRC-100 interop). | The payer |
 
 The contract is the app's `doc/payment-protocol.md`. Every code block below
@@ -41,7 +41,7 @@ import type { WalletInterface } from '@bsv/sdk'
 <!-- example: examples/node.ts#node -->
 ```ts
 // One libp2p node: the payer's peer ID for both the live and the offline path.
-const { node } = await createPaymentNode()
+const { node, privateKey } = await createPaymentNode()
 const ricochet = new RicochetClient(node, { servers: [{ peerId: server.peerId, addrs: [server.addr] }] })
 try {
   const result = await pay({ link }, {
@@ -49,6 +49,7 @@ try {
     libp2p: node, // live: through the server's circuit relay
     relays: [server.addr],
     ricochet, // offline: the payee's Ricochet mailbox
+    identityKey: privateKey, // offline: the payment is sealed from the node's identity
     onProgress: p => console.log(`[${p.path}] ${p.step}`)
   })
   console.log(`${result.status} by ${result.path}: ${result.txid}`)
@@ -77,10 +78,10 @@ import type { WalletInterface } from '@bsv/sdk'
 ```ts
 // WebSockets only: the page reaches the Ricochet server over WSS, and the
 // payee's phone (UDX) through the server's circuit relay.
-const { node } = await createPaymentNode(nodeOptions) // tests allow loopback addresses here
+const { node, privateKey } = await createPaymentNode(nodeOptions) // tests allow loopback addresses here
 const ricochet = new RicochetClient(node, { servers: [{ peerId: server.peerId, addrs: [server.wss] }] })
 try {
-  const { path, txid } = await pay({ link }, { wallet, libp2p: node, relays: [server.wss], ricochet })
+  const { path, txid } = await pay({ link }, { wallet, libp2p: node, relays: [server.wss], ricochet, identityKey: privateKey })
   return { path, txid }
 } finally {
   await ricochet.close()
@@ -95,7 +96,9 @@ try {
 `payment_service.dart`):
 
 1. With a peer ID (`p`): **live** first, if you pass `libp2p`.
-2. Then **offline**, if you pass `ricochet`, but only when live failed
+2. Then **offline**, if you pass `ricochet` and `identityKey` (the
+   private key of the Ricochet client's libp2p node, which
+   `createPaymentNode` returns), but only when live failed
    before any transaction was handed over: the phone could not be reached,
    or it sent no usable invoice. A failure after that point stops here, so
    the payee is never paid twice.
@@ -225,7 +228,8 @@ import { payOffline, payViaPeerPay } from '@spiffyvault/payments'
 
 <!-- example: examples/parts.ts#perpath -->
 ```ts
-const offline = await payOffline({ payeePeerId, amountSats: 1000, note: 'Coffee', network: 'testnet' }, { wallet, ricochet })
+// identityKey: the Ed25519 private key of ricochet's libp2p node
+const offline = await payOffline({ payeePeerId, amountSats: 1000, note: 'Coffee', network: 'testnet' }, { wallet, ricochet, identityKey })
 const peerpay = await payViaPeerPay({ paymentKey, amountSats: 1000, note: 'Coffee' }, {
   wallet,
   host: 'https://messagebox.bsvblockchain.tech', // the default; set your own here
@@ -468,9 +472,15 @@ app that is to be paid by PeerPay needs the key too.
 
 ## What the library does, and does not do
 
-- It checks the payee's anchor record as the app does, and checks one more
-  thing than the app: the prekey bundle's Ed25519 key must be the key in
-  the payee's peer ID.
+- It checks the payee's anchor record as the app does. It reads the
+  payee's pre-key bundle and claims one of its one-time pre-keys as the
+  app does (SpiffyVault `doc/peer-sessions.md` section 5): the bundle's
+  identity key must be the key in the payee's peer ID, and a claimed key
+  must be signed by it. With no one-time pre-key to claim, it seals with
+  the bundle alone, as the app does.
+- It seals every offline payment as the first message of its own session,
+  from `identityKey`; the payee opens it only when that key is the key of
+  the peer ID that sent it. It never reads a reply.
 - It uses a random live `sessionId` (`pay_<ms>_<96 random bits>`), not the
   app's `pay_<ms>`.
 - It writes each live frame with one `send()` and keeps it under 64 KiB,
@@ -494,7 +504,6 @@ From `packages/payments`:
 | `npm run test:integration` | PostgreSQL, Go, `../go-ricochet` | A local go-ricochet (throwaway database `ricochet_payments_test`): offline submit and payee-side decrypt; live through the relay to a mock payee, over UDX; a payee found through the server's DHT and paid, as the app does it |
 | `npm run test:browser` | as above, plus Chrome | Live from headless Chrome over WS and WSS, through the relay to a UDX payee; offline from Chrome |
 | `npm run check:bundle` | | The browser entries have no Node built-ins, no UDX transport and no wallet-toolbox |
-| `node tools/gen-dart-fixture.ts <out.json>` | | JS-made offline messages for the app's `test/signal/js_interop_test.dart` |
 
 ## A real payment on testnet
 
@@ -530,7 +539,7 @@ repository root first).
    node tools/e2e-pay.ts pay '<link>' --dry-run
    ```
 
-   Expect "offline: anchor … verifies", "offline: prekey bundle verifies"
+   Expect "offline: anchor … verifies", "offline: pre-key bundle verifies"
    and "live: the phone answers through the relay". Nothing is spent.
 5. Live, with the app open in the foreground:
 

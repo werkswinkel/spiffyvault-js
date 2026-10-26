@@ -13,7 +13,7 @@ export async function nodePay (link: string, wallet: WalletInterface,
   server: { peerId: string, addr: string } = { peerId: SPIFFYVAULT_RICOCHET.peerId, addr: SPIFFYVAULT_RICOCHET.udxIp }): Promise<string> {
   // #region node
   // One libp2p node: the payer's peer ID for both the live and the offline path.
-  const { node } = await createPaymentNode()
+  const { node, privateKey } = await createPaymentNode()
   const ricochet = new RicochetClient(node, { servers: [{ peerId: server.peerId, addrs: [server.addr] }] })
   try {
     const result = await pay({ link }, {
@@ -21,6 +21,7 @@ export async function nodePay (link: string, wallet: WalletInterface,
       libp2p: node, // live: through the server's circuit relay
       relays: [server.addr],
       ricochet, // offline: the payee's Ricochet mailbox
+      identityKey: privateKey, // offline: the payment is sealed from the node's identity
       onProgress: p => console.log(`[${p.path}] ${p.step}`)
     })
     console.log(`${result.status} by ${result.path}: ${result.txid}`)

@@ -35,7 +35,7 @@ import { Setup } from '@bsv/wallet-toolbox'
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys'
 import { RicochetClient } from '@stephanfeb/ricochet/node'
 import {
-  SPIFFYVAULT_RICOCHET, createPaymentNode, dialPayee, fetchAnchor, fetchPrekeyBundle, isPaymentError, pay, payLive, payOffline,
+  SPIFFYVAULT_RICOCHET, createPaymentNode, dialPayee, fetchAnchor, fetchBundle, isPaymentError, pay, payLive, payOffline,
   payViaPeerPay, planPayment, resolveDnsAddrs
 } from '../src/node.ts'
 import type { PaymentProgress, PayPlan } from '../src/node.ts'
@@ -147,7 +147,7 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
 
   // A stable payer peer ID, from the key file.
   const seed = Hash.sha256([...setup.rootKey.toArray(), ...Utils.toArray('spiffyvault-e2e libp2p', 'utf8')])
-  const { node } = await createPaymentNode({ privateKey: await generateKeyPairFromSeed('Ed25519', Uint8Array.from(seed)) })
+  const { node, privateKey: identityKey } = await createPaymentNode({ privateKey: await generateKeyPairFromSeed('Ed25519', Uint8Array.from(seed)) })
   say(`payer peer ID: ${node.peerId.toString()}`)
   const server = ricochetServer(typeof o.ricochet === 'string' ? o.ricochet : undefined)
   const addrs = server.addrs.length > 0
@@ -166,8 +166,8 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
         try {
           const a = await fetchAnchor(ricochet, plan.peerId, plan.network, { ...(plan.walletId !== undefined ? { walletId: plan.walletId } : {}), ...(plan.note !== undefined ? { note: plan.note } : {}) })
           say(`   offline: anchor ${a.record.anchorPublicKey} at ${a.path} verifies (epoch ${a.record.epoch}, ${new Date(a.record.timestamp).toISOString()})`)
-          const b = await fetchPrekeyBundle(ricochet, plan.peerId, plan.network)
-          say(`   offline: prekey bundle verifies (signed prekey ${b.signedPreKeyId}, ${b.oneTimePreKeys.length} one-time prekeys, published ${new Date(b.publishedAt).toISOString()})`)
+          const b = await fetchBundle(ricochet, plan.peerId, plan.network)
+          say(`   offline: pre-key bundle verifies (signed pre-key ${b.signedPreKeyId}); a payment claims one one-time pre-key`)
         } catch (e) { say(`   offline: not ready: ${isPaymentError(e) ? `${e.code}: ` : ''}${e instanceof Error ? e.message : String(e)}`) }
         try {
           const conn = await dialPayee(node, plan.peerId, relays, AbortSignal.timeout(30_000))
@@ -182,10 +182,10 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
     const ctx = { wallet, onProgress: progress }
     let r
     if (mode === 'live') r = await payLive({ payeePeerId: plan.peerId ?? fail('the link has no peer ID'), ...common }, { ...ctx, libp2p: node, relays })
-    else if (mode === 'offline') r = await payOffline({ payeePeerId: plan.peerId ?? fail('the link has no peer ID'), ...common }, { ...ctx, ricochet })
+    else if (mode === 'offline') r = await payOffline({ payeePeerId: plan.peerId ?? fail('the link has no peer ID'), ...common }, { ...ctx, ricochet, identityKey })
     else if (mode === 'peerpay') r = await payViaPeerPay({ paymentKey: plan.paymentKey ?? fail('the link has no payment key'), amountSats: plan.amountSats, ...(plan.note !== undefined ? { note: plan.note } : {}) }, { ...ctx, ...(host !== undefined ? { host } : {}) })
     else r = await pay({ link, ...(typeof o.amount === 'string' ? { amountSats: Number(o.amount) } : {}), ...(typeof o.note === 'string' ? { note: o.note } : {}) },
-      { ...ctx, network: 'testnet', libp2p: node, relays, ricochet, peerPay: { ...(host !== undefined ? { host } : {}), fallback: o['peerpay-fallback'] === true } })
+      { ...ctx, network: 'testnet', libp2p: node, relays, ricochet, identityKey, peerPay: { ...(host !== undefined ? { host } : {}), fallback: o['peerpay-fallback'] === true } })
     say(`3. done: ${r.status} by ${r.path}; txid ${r.txid}`)
     for (const a of r.attempts) say(`   earlier attempt: ${a.path ?? '?'} ${a.code}: ${a.message}`)
     if (r.path === 'live') say(`   the phone checked it by SPV${r.broadcasted === true ? ' and is broadcasting it' : ' (the network already holds it)'}`)

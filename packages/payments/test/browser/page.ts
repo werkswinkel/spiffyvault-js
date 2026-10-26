@@ -46,12 +46,12 @@ async function liveFlow (a: { relay: string, relayPeerId: string, payeePeerId: s
 }
 
 async function offlineFlow (a: { serverPeerId: string, addr: string, payeePeerId: string, amountSats: number }): Promise<FlowOutcome & { messageId?: string }> {
-  const { node } = await createPaymentNode({ allowPrivateAddresses: true })
+  const { node, privateKey } = await createPaymentNode({ allowPrivateAddresses: true })
   const payerPeerId = node.peerId.toString()
   const ricochet = new RicochetClient(node, { servers: [{ peerId: a.serverPeerId, addrs: [a.addr] }] })
   try {
     const r = await payOffline({ payeePeerId: a.payeePeerId, amountSats: a.amountSats, note: 'offline from Chrome', network: 'testnet' },
-      { wallet: new FakeWallet() as unknown as WalletInterface, ricochet })
+      { wallet: new FakeWallet() as unknown as WalletInterface, ricochet, identityKey: privateKey })
     return { ok: true, txid: r.txid, status: r.status, payerPeerId, ...(r.messageId !== undefined ? { messageId: r.messageId } : {}), relayAddr: node.getConnections()[0]?.remoteAddr.toString() ?? '' }
   } catch (e) {
     return failure(e, payerPeerId)

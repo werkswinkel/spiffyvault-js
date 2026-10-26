@@ -3,10 +3,12 @@
  * payment in their Ricochet mailbox (lib/services/offline_payment_service.dart).
  *
  * 1. Read and verify the payee's anchor record (request, wallet, usual path).
- * 2. Read and verify the payee's prekey bundle.
+ * 2. Read and verify the payee's pre-key bundle, and claim one of its
+ *    one-time pre-keys (SpiffyVault doc/peer-sessions.md section 5).
  * 3. Derive a single-use BRC-42 destination under the anchor key.
  * 4. Build the transaction, not broadcast (the payee broadcasts), as BEEF V1.
- * 5. Seal the OfflinePaymentMessage as a PreKeySignalMessage.
+ * 5. Seal the OfflinePaymentMessage as the first message of a new session
+ *    (a pre-key message), from the payer's identity key.
  * 6. Submit it to `wallet/offline-payments` (per network), priority 2, persistent,
  *    with no RCE2 encryption and no compression.
  *
@@ -14,8 +16,9 @@
  */
 
 import { NoServerError } from '@stephanfeb/ricochet/core'
+import type { Ed25519PrivateKeyLike } from '@stephanfeb/ricochet/core'
 import { fetchAnchor } from './anchor.ts'
-import { toHex, utf8, uuidV4 } from './bytes.ts'
+import { equalBytes, toHex, utf8, uuidV4 } from './bytes.ts'
 import { deriveOfflineDestination } from './destination.ts'
 import type { Type42Derivation } from './destination.ts'
 import { PaymentError, errorText } from './errors.ts'
@@ -23,10 +26,13 @@ import { fundWithFunder, fundWithWallet } from './funding.ts'
 import type { FundedPayment, PaymentOutput } from './funding.ts'
 import { OFFLINE_PAYMENTS_FOLDER, forNetwork } from './networks.ts'
 import type { Network } from './networks.ts'
+import { ed25519KeyOfPeerId } from './peer.ts'
 import type { RicochetLike } from './ricochet.ts'
-import { fetchPrekeyBundle } from './signal/bundle.ts'
-import { sealFirstMessage } from './signal/seal.ts'
-import type { SealOptions } from './signal/seal.ts'
+import { fetchBundle } from './sessions/bundle.ts'
+import { identityOfSeed } from './sessions/keys.ts'
+import { withOneTimeKey } from './sessions/one-time-key.ts'
+import { sealFirstMessage } from './sessions/seal.ts'
+import type { SealOptions } from './sessions/seal.ts'
 import type { FundingContext, PaymentProgress, PaymentResult } from './types.ts'
 
 export const OFFLINE_MESSAGE_VERSION = 2
@@ -104,8 +110,27 @@ export interface OfflinePayParams {
 export interface OfflinePayContext extends FundingContext {
   /** A RicochetClient connected to the payee's server (SpiffyVault's by default). Its peer ID is the payer. */
   ricochet: RicochetLike
-  /** Signal sealing options (one-time prekey choice, fixed keys for tests). */
+  /**
+   * The Ed25519 private key of `ricochet`'s libp2p node (createPaymentNode
+   * returns it as `privateKey`): the payment is sealed from this identity,
+   * and the payee opens it only when it is the key of the sending peer ID.
+   */
+  identityKey: Ed25519PrivateKeyLike
+  /** Sealing options (fixed keys for tests). */
   seal?: SealOptions
+}
+
+/** The 32-byte seed of `key`, checked to be the key of `peerId`. */
+export function payerSeed (key: Ed25519PrivateKeyLike, peerId: string): Uint8Array {
+  const raw = key instanceof Uint8Array ? key : key.raw
+  if (!(key instanceof Uint8Array) && key.type !== 'Ed25519') throw new PaymentError('no-route', `The payer's identity key is ${key.type}, not Ed25519`, { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
+  if (raw.length !== 32 && raw.length !== 64) throw new PaymentError('no-route', 'The payer\'s identity key is not an Ed25519 private key', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
+  const seed = raw.slice(0, 32)
+  const peerKey = ed25519KeyOfPeerId(peerId)
+  if (peerKey === null || !equalBytes(peerKey, identityOfSeed(seed).ed25519)) {
+    throw new PaymentError('no-route', 'The identity key is not the key of the Ricochet client\'s peer ID: pass the private key of the same libp2p node', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
+  }
+  return seed
 }
 
 function invalid (message: string): PaymentError {
@@ -119,6 +144,7 @@ export async function payOffline (params: OfflinePayParams, ctx: OfflinePayConte
   if (ctx.wallet === undefined && ctx.funder === undefined) throw new PaymentError('no-route', 'Offline payments need a wallet or a funder', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
   const { ricochet } = ctx
   const senderPeerId = ricochet.peerId
+  const seed = payerSeed(ctx.identityKey, senderPeerId)
   const note = params.note?.trim() === '' ? undefined : params.note
 
   progress('anchor')
@@ -127,7 +153,9 @@ export async function payOffline (params: OfflinePayParams, ctx: OfflinePayConte
     ...(note !== undefined ? { note } : {})
   })
   progress('prekeys')
-  const bundle = await fetchPrekeyBundle(ricochet, params.payeePeerId, params.network)
+  const claimed = await withOneTimeKey(ricochet, params.payeePeerId, params.network, await fetchBundle(ricochet, params.payeePeerId, params.network))
+  const bundle = claimed.bundle
+  if (claimed.missing !== undefined) progress('prekeys', `no one-time pre-key (${claimed.missing}); sealing without one`)
 
   progress('derive')
   let destination
@@ -165,7 +193,7 @@ export async function payOffline (params: OfflinePayParams, ctx: OfflinePayConte
   }
   let sealed
   try {
-    sealed = sealFirstMessage(bundle, utf8(offlineMessageJson(message)), ctx.seal)
+    sealed = sealFirstMessage(bundle, seed, utf8(offlineMessageJson(message)), ctx.seal)
   } catch (e) {
     return await giveUp('prekeys-invalid', `Could not seal the payment for the payee: ${errorText(e)}`, e)
   }

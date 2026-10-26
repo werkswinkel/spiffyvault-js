@@ -74,7 +74,7 @@ test('pay --dry-run checks offline readiness and the live route, and spends noth
   assert.equal(r.code, 0)
   assert.match(r.out, /amount 1234 sats/)
   assert.match(r.out, /offline: anchor 0[23][0-9a-f]{64} at wallet\/payment-anchor verifies/)
-  assert.match(r.out, /offline: prekey bundle verifies/)
+  assert.match(r.out, /offline: pre-key bundle verifies/)
   assert.match(r.out, /live: the phone answers through the relay/)
   assert.match(r.out, /would ask the wallet for 1234 sats/)
   assert.equal(payee.payee.received.length, 0, 'no stream was opened to the payee')

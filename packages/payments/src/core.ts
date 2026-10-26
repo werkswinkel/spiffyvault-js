@@ -11,7 +11,7 @@ export {
 export type { PaymentLink, ParsedPaymentKey } from './link.ts'
 
 export {
-  canonicalNetwork, linkNetwork, walletNetworkType, forNetwork, p2pkhVersion, OFFLINE_PAYMENTS_FOLDER, PREKEYS_FOLDER,
+  canonicalNetwork, linkNetwork, walletNetworkType, forNetwork, p2pkhVersion, OFFLINE_PAYMENTS_FOLDER, PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER,
   PAYMENT_ANCHOR_DOCUMENT, SPIFFYVAULT_RICOCHET, DEFAULT_MESSAGE_BOX_HOST
 } from './networks.ts'
 export type { Network, WalletNetworkType } from './networks.ts'
@@ -55,17 +55,15 @@ export {
 } from './anchor.ts'
 export type { AnchorRecord, AnchorLookup, FetchedAnchor } from './anchor.ts'
 
+export { encodeBundle, decodeBundle, verifyBundle, fetchBundle } from './sessions/bundle.ts'
+export type { PreKeyBundle } from './sessions/bundle.ts'
 export {
-  parsePrekeyBundle, prekeyBundleJson, bundleCanonicalBytes, verifyPrekeyBundle, fetchPrekeyBundle
-} from './signal/bundle.ts'
-export type { PrekeyBundle, OneTimePreKey } from './signal/bundle.ts'
-export { sealFirstMessage } from './signal/seal.ts'
-export type { SealOptions, Sealed } from './signal/seal.ts'
-export {
-  encodeSignalMessage, decodeSignalMessage, encodePreKeySignalMessage, decodePreKeySignalMessage, parsesAsSignalMessage
-} from './signal/messages.ts'
-export type { SignalMessage, PreKeySignalMessage } from './signal/messages.ts'
-export { x3dhInitiator, firstChain, hkdf32, dh as x25519SharedSecret, x25519Public } from './signal/kdf.ts'
+  encodeOneTimeKeyItem, decodeOneTimeKeyItem, verifyOneTimeKeyItem, oneTimeKeySignedBytes, withOneTimeKey, ONE_TIME_KEY_LABEL
+} from './sessions/one-time-key.ts'
+export type { OneTimeKeyItem, NoOneTimeKey } from './sessions/one-time-key.ts'
+export { sealFirstMessage } from './sessions/seal.ts'
+export type { SealOptions, Sealed } from './sessions/seal.ts'
+export { APPLICATION as PEER_SESSIONS_APPLICATION, edPublicToX25519 } from './sessions/keys.ts'
 
 export {
   payOffline, offlineMessageJson, parseOfflineMessage, OFFLINE_MESSAGE_VERSION, OFFLINE_PAYMENT_PRIORITY

@@ -19,6 +19,7 @@ class Store {
   readonly mail: Stored[] = []
   refuse?: { status: number, message: string }
   throwOnSend?: Error
+  claimFails?: Error
   seq = 1
 }
 
@@ -34,6 +35,7 @@ export class MemRicochet implements RicochetLike {
   get mail (): Stored[] { return this.store.mail }
   set refuse (r: { status: number, message: string } | undefined) { this.store.refuse = r }
   set throwOnSend (e: Error | undefined) { this.store.throwOnSend = e }
+  set claimFails (e: Error | undefined) { this.store.claimFails = e }
 
   /** A client for another peer on the same "server". */
   as (peerId: string): MemRicochet { return new MemRicochet(peerId, this.store) }
@@ -51,6 +53,15 @@ export class MemRicochet implements RicochetLike {
       .filter(m => m.recipientPeerId === owner && m.folderPath === (opts.folderPath ?? '') && m.sequenceNumber >= (opts.fromSequence ?? 0))
       .slice(0, opts.maxMessages ?? 100)
     return { messages: messages.map(m => ({ ...m })) as never, hasMore: false }
+  }
+
+  /** Takes the oldest message of the owner's folder, as a claim mailbox hands it out. */
+  async claimMessage (...[owner, folderPath]: Parameters<RicochetLike['claimMessage']>): ReturnType<RicochetLike['claimMessage']> {
+    if (this.store.claimFails !== undefined) throw this.store.claimFails
+    const i = this.store.mail.findIndex(m => m.recipientPeerId === owner.toString() && m.folderPath === folderPath)
+    if (i < 0) return null
+    const [m] = this.store.mail.splice(i, 1)
+    return { ...m } as never
   }
 
   async sendMessage (...[recipient, payload, opts = {}]: Parameters<RicochetLike['sendMessage']>): ReturnType<RicochetLike['sendMessage']> {

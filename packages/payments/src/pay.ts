@@ -22,6 +22,7 @@
  * PeerPay: only the payee's signature ties its key to the peer ID.
  */
 
+import type { Ed25519PrivateKeyLike } from '@stephanfeb/ricochet/core'
 import { checkPayeeDomain } from './domain.ts'
 import type { DomainFetch } from './domain.ts'
 import { DomainError, LinkChangedError, LinkError, PaymentError, isPaymentError } from './errors.ts'
@@ -40,7 +41,7 @@ import { payViaPeerPay } from './peerpay.ts'
 import type { MessageBoxSender } from './peerpay.ts'
 import { isPeerId } from './peer.ts'
 import type { RicochetLike } from './ricochet.ts'
-import type { SealOptions } from './signal/seal.ts'
+import type { SealOptions } from './sessions/seal.ts'
 import type { FundingContext, PaymentResult } from './types.ts'
 
 export interface PayRequest {
@@ -67,13 +68,19 @@ export interface PayContext extends FundingContext {
   network?: Network
   /** A RicochetClient for the offline path (SpiffyVault's server). Without it, no offline path. */
   ricochet?: RicochetLike
+  /**
+   * The Ed25519 private key of the Ricochet client's libp2p node
+   * (createPaymentNode returns it): offline payments are sealed from it.
+   * Required with `ricochet`.
+   */
+  identityKey?: Ed25519PrivateKeyLike
   /** A libp2p node with the circuit relay transport for the live path. Without it, no live path. */
   libp2p?: LivePayContext['libp2p']
   /** Relay addresses for the live path (default: SpiffyVault's server, WSS then UDX). */
   relays?: string[]
   /** Live path settings. */
   live?: Pick<LivePayContext, 'split' | 'maxFrameBytes' | 'timeouts'>
-  /** Offline path: Signal sealing options. */
+  /** Offline path: sealing options (fixed keys for tests). */
   seal?: SealOptions
   /**
    * PeerPay: the message box host (default https://messagebox.bsvblockchain.tech),
@@ -228,9 +235,15 @@ export async function pay (req: PayRequest, ctx: PayContext): Promise<PaymentRes
     if (ctx.ricochet !== undefined) {
       if (last !== undefined) fallback('live', 'offline', last)
       const ricochet = ctx.ricochet
-      const r = await attempt('offline', async () => await payOffline({ payeePeerId, ...common }, {
-        ...funding, ricochet, ...(ctx.seal !== undefined ? { seal: ctx.seal } : {})
-      }))
+      const identityKey = ctx.identityKey
+      const r = await attempt('offline', async () => {
+        if (identityKey === undefined) {
+          throw new PaymentError('no-route', 'Offline payments need the payer\'s identity key: pass identityKey, the private key of the Ricochet client\'s libp2p node', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
+        }
+        return await payOffline({ payeePeerId, ...common }, {
+          ...funding, ricochet, identityKey, ...(ctx.seal !== undefined ? { seal: ctx.seal } : {})
+        })
+      })
       if (!(r instanceof PaymentError)) return r
       last = r; lastPath = 'offline'
     }

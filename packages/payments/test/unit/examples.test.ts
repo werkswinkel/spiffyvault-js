@@ -4,13 +4,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PrivateKey } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
-import { anchorRecordJson, formatPaymentLink, prekeyBundleJson } from '../../src/index.ts'
+import { anchorRecordJson, formatPaymentLink } from '../../src/index.ts'
 // The examples import the built package, so errors must come from it too.
 import { PaymentError, fundWithFunder } from '@spiffyvault/payments'
 import { handle, makeFunder, payeeLine, perPath, readLink, shopFile, signedLink } from '../../examples/parts.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
-import { anchorKey, fill, identityFromSeed, signAnchorRecord, signBundle } from '../support/payee.ts'
+import { anchorKey, fill, identityFromSeed, publishSessionKeys, signAnchorRecord } from '../support/payee.ts'
 import { randomBytes } from '../support/internals.ts'
 
 test('README: reading a link', async () => {
@@ -24,9 +24,10 @@ test('README: per-path calls', async () => {
   const id = await identityFromSeed(randomBytes(32))
   const server = new MemRicochet(id.peerId)
   server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchorKey().pub, epoch: 0, networkType: 'test', timestamp: 1 })))
-  await server.sendMessage(id.peerId, prekeyBundleJson(signBundle(id, { registrationId: 1, signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map() }, 1)), { folderPath: 'signal/prekeys' })
+  await publishSessionKeys(server.as(id.peerId), id, { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map() })
   const sent: string[] = []
-  const out = await perPath(new FakeWallet({ coins: [10_000, 10_000] }) as unknown as WalletInterface, server.as((await identityFromSeed(fill(4))).peerId), id.peerId,
+  const payer = await identityFromSeed(fill(4))
+  const out = await perPath(new FakeWallet({ coins: [10_000, 10_000] }) as unknown as WalletInterface, server.as(payer.peerId), payer.seed, id.peerId,
     PrivateKey.fromRandom().toPublicKey().toString(), { sendMessage: async m => { sent.push(m.body); return {} } })
   assert.deepEqual(out, ['handed-off', 'delivered'])
   assert.equal(sent.length, 1)

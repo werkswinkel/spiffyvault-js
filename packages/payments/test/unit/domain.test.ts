@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { WalletInterface } from '@bsv/sdk'
 import {
-  DomainError, MAX_DOMAIN_FILE_BYTES, anchorRecordJson, prekeyBundleJson, checkPayeeDomain, domainEntry, domainFileText, formatPaymentLink, normalizeDomain, parsePaymentLink,
+  DomainError, MAX_DOMAIN_FILE_BYTES, anchorRecordJson, checkPayeeDomain, domainEntry, domainFileText, formatPaymentLink, normalizeDomain, parsePaymentLink,
   pay, utf8, verifyDomainFile
 } from '../../src/index.ts'
 import type { DomainFetch, PayContext } from '../../src/index.ts'
@@ -16,7 +16,7 @@ import { FakeWallet } from '../support/fake-wallet.ts'
 import { randomBytes } from '../support/internals.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { collectOfflinePayment } from '../support/offline-payee.ts'
-import { anchorKey, fill, identityFromSeed, signAnchorRecord, signBundle } from '../support/payee.ts'
+import { anchorKey, fill, identityFromSeed, publishSessionKeys, signAnchorRecord } from '../support/payee.ts'
 
 const KEY = '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc'
 const OTHER_KEY = '03a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc'
@@ -138,18 +138,20 @@ test('pay() refuses a link whose domain does not vouch for the payee, before ask
 
 test('pay() pays a link its domain vouches for, and says which domain and name', async () => {
   const id = await identityFromSeed(randomBytes(32))
-  const keys = { registrationId: 1, signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map([[5, randomBytes(32)]]) }
+  const keys = { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map([[5, randomBytes(32)]]) }
   const anchor = anchorKey()
   const server = new MemRicochet(id.peerId)
   server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType: 'test', timestamp: 1 })))
-  await server.sendMessage(id.peerId, prekeyBundleJson(signBundle(id, keys, 1)), { folderPath: 'signal/prekeys' })
+  await publishSessionKeys(server.as(id.peerId), id, keys)
+  const payer = await identityFromSeed(fill(1))
   const file = domainFileText([await domainEntry({ domain: 'shop.example', peerId: id.peerId, networks: ['testnet'], name: 'Corner Shop' }, id.libp2pKey)])
 
   const steps: string[] = []
   const link = formatPaymentLink({ network: 'testnet', peerId: id.peerId, amountSats: 1200, domain: 'shop.example' })
   const r = await pay({ link }, {
     wallet: new FakeWallet() as unknown as WalletInterface,
-    ricochet: server.as((await identityFromSeed(fill(1))).peerId),
+    ricochet: server.as(payer.peerId),
+    identityKey: payer.seed,
     domainFetch: serve(file),
     onProgress: s => steps.push(s.step)
   })

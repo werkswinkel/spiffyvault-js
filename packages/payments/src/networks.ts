@@ -36,7 +36,10 @@ export function walletNetworkType (network: Network): WalletNetworkType {
 }
 
 export const OFFLINE_PAYMENTS_FOLDER = 'wallet/offline-payments'
-export const PREKEYS_FOLDER = 'signal/prekeys'
+/** The payee's pre-key bundle (doc/peer-sessions.md section 3). */
+export const PEER_BUNDLE_FOLDER = 'signal/v2/bundle'
+/** The payee's claim mailbox of one-time pre-keys. */
+export const PEER_ONE_TIME_KEYS_FOLDER = 'signal/v2/one-time-keys'
 export const PAYMENT_ANCHOR_DOCUMENT = 'wallet/payment-anchor'
 
 /** `base` as used on `network`: testnet keeps the bare name. */

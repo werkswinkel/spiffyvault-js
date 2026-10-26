@@ -4,12 +4,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PrivateKey } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
-import { NetworkMismatchError, PaymentError, anchorRecordJson, formatPaymentLink, pay, planPayment, prekeyBundleJson, signPaymentLink } from '../../src/index.ts'
+import { NetworkMismatchError, PaymentError, anchorRecordJson, formatPaymentLink, pay, planPayment, signPaymentLink } from '../../src/index.ts'
 import type { MessageBoxSender, PayContext } from '../../src/index.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { collectOfflinePayment } from '../support/offline-payee.ts'
-import { anchorKey, fill, identityFromSeed, signAnchorRecord, signBundle } from '../support/payee.ts'
+import { anchorKey, fill, identityFromSeed, publishSessionKeys, signAnchorRecord } from '../support/payee.ts'
 import { randomBytes } from '../support/internals.ts'
 
 const asWallet = (w: FakeWallet): WalletInterface => w as unknown as WalletInterface
@@ -22,20 +22,21 @@ class Box implements MessageBoxSender {
 
 async function payee (anchorPath = 'wallet/payment-anchor') {
   const id = await identityFromSeed(randomBytes(32))
-  const keys = { registrationId: 1, signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map([[5, randomBytes(32)]]) }
+  const keys = { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map([[5, randomBytes(32)]]) }
   const anchor = anchorKey()
   const server = new MemRicochet(id.peerId)
   server.putDoc(id.peerId, anchorPath, anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchor.pub, epoch: 0, networkType: 'test', timestamp: 1 })))
-  await server.sendMessage(id.peerId, prekeyBundleJson(signBundle(id, keys, 1)), { folderPath: 'signal/prekeys' })
-  const ricochet = server.as((await identityFromSeed(fill(1))).peerId)
-  return { id, keys, anchor, server, ricochet, key: PrivateKey.fromRandom().toPublicKey().toString() }
+  await publishSessionKeys(server.as(id.peerId), id, keys)
+  const payer = await identityFromSeed(fill(1))
+  const ricochet = server.as(payer.peerId)
+  return { id, keys, anchor, server, ricochet, identityKey: payer.seed, key: PrivateKey.fromRandom().toPublicKey().toString() }
 }
 
 test('peer ID first: live unreachable, so offline; the attempt is reported', async () => {
   const p = await payee()
   const link = formatPaymentLink({ network: 'testnet', peerId: p.id.peerId, paymentKey: p.key, amountSats: 1500, memo: 'Lunch' })
   const steps: string[] = []
-  const r = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: p.ricochet, onProgress: s => steps.push(`${s.path}:${s.step}`) })
+  const r = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: p.ricochet, identityKey: p.identityKey, onProgress: s => steps.push(`${s.path}:${s.step}`) })
   assert.equal(r.path, 'offline')
   assert.equal(r.note, 'Lunch')
   assert.equal(r.attempts.length, 1)
@@ -48,7 +49,7 @@ test('peer ID first: live unreachable, so offline; the attempt is reported', asy
 test('a request link: the note carries the ref and the offline anchor is the request\'s', async () => {
   const p = await payee('wallet/payment-anchor/r/ABCD2345')
   const r = await pay({ link: formatPaymentLink({ network: 'testnet', peerId: p.id.peerId, requestRef: 'ABCD2345' }), amountSats: 10, note: 'Tea' },
-    { wallet: asWallet(new FakeWallet()), ricochet: p.ricochet })
+    { wallet: asWallet(new FakeWallet()), ricochet: p.ricochet, identityKey: p.identityKey })
   assert.equal(r.note, 'Tea · ref ABCD2345')
 })
 
@@ -62,19 +63,20 @@ test('only a key: PeerPay, to the default host unless one is given', async () =>
 
 test('PeerPay after live and offline failed only when allowed, and only for a signed link', async () => {
   const id = await identityFromSeed(randomBytes(32))
-  const empty = new MemRicochet('x').as((await identityFromSeed(fill(2))).peerId)
+  const payer = await identityFromSeed(fill(2))
+  const empty = new MemRicochet('x').as(payer.peerId)
   const key = PrivateKey.fromRandom().toPublicKey().toString()
   const unsigned = { network: 'testnet' as const, peerId: id.peerId, paymentKey: key, amountSats: 5 }
   // Unsigned: the key may be anyone's, so no PeerPay even when allowed.
-  const u = await pay({ link: formatPaymentLink(unsigned) }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, peerPay: { client: new Box(), fallback: true } }).catch(x => x)
+  const u = await pay({ link: formatPaymentLink(unsigned) }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, identityKey: payer.seed, peerPay: { client: new Box(), fallback: true } }).catch(x => x)
   assert.equal(u.code, 'anchor-missing')
   const link = formatPaymentLink(await signPaymentLink(unsigned, id.libp2pKey))
-  const e = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, peerPay: { client: new Box() } }).catch(x => x)
+  const e = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, identityKey: payer.seed, peerPay: { client: new Box() } }).catch(x => x)
   assert.ok(e instanceof PaymentError)
   assert.equal(e.code, 'anchor-missing')
   assert.deepEqual(e.attempts.map(a => a.code), ['payee-unreachable'])
   const box = new Box()
-  const r = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, peerPay: { client: box, fallback: true } })
+  const r = await pay({ link }, { wallet: asWallet(new FakeWallet()), libp2p: unreachable, ricochet: empty, identityKey: payer.seed, peerPay: { client: box, fallback: true } })
   assert.equal(r.path, 'peerpay')
   assert.deepEqual(r.attempts.map(a => a.code), ['payee-unreachable', 'anchor-missing'])
 })
@@ -83,7 +85,7 @@ test('a failure that is not safe stops the fallback', async () => {
   const p = await payee()
   // funding fails on the offline path: no PeerPay even when allowed
   const e = await pay({ link: formatPaymentLink({ network: 'testnet', peerId: p.id.peerId, paymentKey: p.key, amountSats: 5 }) },
-    { wallet: asWallet(new FakeWallet({ failCreate: 'Insufficient funds' })), ricochet: p.ricochet, peerPay: { client: new Box(), fallback: true } }).catch(x => x)
+    { wallet: asWallet(new FakeWallet({ failCreate: 'Insufficient funds' })), ricochet: p.ricochet, identityKey: p.identityKey, peerPay: { client: new Box(), fallback: true } }).catch(x => x)
   assert.equal(e.code, 'funding-failed')
   assert.equal(e.path, 'offline')
 })
