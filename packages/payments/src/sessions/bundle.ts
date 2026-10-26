@@ -8,13 +8,25 @@
 
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { NoServerError, ProtocolError } from '@go-ricochet/ricochet/core'
-import { concat, equalBytes, readU32be, u32be } from '../bytes.ts'
+import { concat, equalBytes, readU32be, u32be, utf8 } from '../bytes.ts'
 import { PaymentError, errorText } from '../errors.ts'
 import { PEER_BUNDLE_FOLDER, forNetwork } from '../networks.ts'
 import type { Network } from '../networks.ts'
 import { ed25519KeyOfPeerId } from '../peer.ts'
 import type { RicochetLike } from '../ricochet.ts'
-import { ENCODED_KEY_LENGTH, PROTOCOL_VERSION, decodeKey, encodeKey } from './keys.ts'
+import { APPLICATION, ENCODED_KEY_LENGTH, decodeKey, encodeKey } from './keys.ts'
+
+/**
+ * The bundle's version byte (Appendix A.1). Version 2 signs the signed
+ * pre-key with a label and its id; version 1 signed the bare key and is not
+ * read.
+ */
+export const BUNDLE_VERSION = 2
+
+/** What the identity key signs: `utf8("peer-sessions/1 signed pre-key") ‖ u32(id) ‖ Encode(signedPreKey)`. */
+export function signedPreKeySignedBytes (id: number, signedPreKey: Uint8Array): Uint8Array {
+  return concat(utf8(`${APPLICATION} signed pre-key`), u32be(id), encodeKey(signedPreKey))
+}
 
 export interface PreKeyBundle {
   /** The payee's Ed25519 identity key, 32 bytes. */
@@ -22,7 +34,7 @@ export interface PreKeyBundle {
   signedPreKeyId: number
   /** The signed pre-key, X25519, 32 bytes. */
   signedPreKey: Uint8Array
-  /** Ed25519 signature by the identity key over `Encode(signedPreKey)`. */
+  /** Ed25519 signature by the identity key over `signedPreKeySignedBytes(signedPreKeyId, signedPreKey)`. */
   signedPreKeySignature: Uint8Array
   /** A one-time pre-key, when one is used (a published bundle has none). */
   oneTimePreKey?: { id: number, key: Uint8Array }
@@ -30,7 +42,7 @@ export interface PreKeyBundle {
 
 export function encodeBundle (b: PreKeyBundle): Uint8Array {
   return concat(
-    new Uint8Array([PROTOCOL_VERSION]),
+    new Uint8Array([BUNDLE_VERSION]),
     b.identityKey,
     u32be(b.signedPreKeyId),
     encodeKey(b.signedPreKey),
@@ -43,7 +55,7 @@ export function encodeBundle (b: PreKeyBundle): Uint8Array {
 export function decodeBundle (bytes: Uint8Array): PreKeyBundle {
   const fixed = 1 + 32 + 4 + ENCODED_KEY_LENGTH + 64 + 1
   if (bytes.length < fixed) throw new RangeError('bundle too short')
-  if (bytes[0] !== PROTOCOL_VERSION) throw new RangeError('unknown bundle version')
+  if (bytes[0] !== BUNDLE_VERSION) throw new RangeError('unknown bundle version')
   let o = 1
   const identityKey = bytes.slice(o, o + 32); o += 32
   const signedPreKeyId = readU32be(bytes, o); o += 4
@@ -72,7 +84,7 @@ export function verifyEd25519 (signature: Uint8Array, message: Uint8Array, publi
 export function verifyBundle (b: PreKeyBundle, payeePeerId: string): string | null {
   const peerKey = ed25519KeyOfPeerId(payeePeerId)
   if (peerKey === null || !equalBytes(peerKey, b.identityKey)) return 'bundle identity key is not the payee peer ID\'s key'
-  if (!verifyEd25519(b.signedPreKeySignature, encodeKey(b.signedPreKey), b.identityKey)) return 'signed pre-key signature does not verify'
+  if (!verifyEd25519(b.signedPreKeySignature, signedPreKeySignedBytes(b.signedPreKeyId, b.signedPreKey), b.identityKey)) return 'signed pre-key signature does not verify'
   return null
 }
 

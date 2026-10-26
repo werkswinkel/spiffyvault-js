@@ -12,7 +12,7 @@ import { cbc } from '@noble/ciphers/aes.js'
 import { hmac } from '@noble/hashes/hmac.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import {
-  concat, decodeBundle, decodeOneTimeKeyItem, encodeBundle, encodeOneTimeKeyItem, equalBytes, fromHex, fromUtf8, sealFirstMessage, toHex, utf8,
+  concat, decodeBundle, decodeOneTimeKeyItem, encodeBundle, encodeOneTimeKeyItem, equalBytes, fromHex, fromUtf8, sealFirstMessage, signedPreKeySignedBytes, toHex, utf8,
   verifyBundle, verifyOneTimeKeyItem
 } from '../support/internals.ts'
 import { decodeKey, dh, edPublicToX25519, encodeKey, identityOfSeed, kdfCk, kdfRk, messageKeys, x25519Public } from '../../src/sessions/keys.ts'
@@ -55,6 +55,9 @@ test('the bundles are Bob\'s, signed, with and without a one-time pre-key, and n
   assert.equal(toHex(encodeKey(bundle.signedPreKey)), v.signedPreKey.public)
   assert.equal(bundle.oneTimePreKey, undefined)
   assert.equal(verifyBundle(bundle, v.bob.peerId), null)
+  assert.equal(toHex(signedPreKeySignedBytes(bundle.signedPreKeyId, bundle.signedPreKey)), v.signedPreKey.signed)
+  // Version 1 signed the bare key: not read.
+  assert.throws(() => decodeBundle(h(v.refusedBundleVersion1)), /unknown bundle version/)
   assert.equal(toHex(encodeBundle(bundle)), v.bundle)
   assert.match(verifyBundle(bundle, v.alice.peerId)!, /not the payee peer ID's key/)
   const tampered = h(v.bundle); tampered[40] = tampered[40]! ^ 1

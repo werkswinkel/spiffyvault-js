@@ -16,7 +16,7 @@ import type { PrivateKey as Libp2pPrivateKey } from '@libp2p/interface'
 import { PrivateKey } from '@bsv/sdk'
 import {
   ANCHOR_RECORD_LIFETIME_MS, ANCHOR_RECORD_VERSION, PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER, anchorContextHex, anchorSignaturePayload, concat, encodeBundle, encodeOneTimeKeyItem,
-  equalBytes, forNetwork, oneTimeKeySignedBytes, readU32be, toHex, utf8
+  equalBytes, forNetwork, oneTimeKeySignedBytes, readU32be, signedPreKeySignedBytes, toHex, utf8
 } from './internals.ts'
 import type { AnchorRecord, Network, PreKeyBundle, RicochetLike } from '../../src/index.ts'
 import { decodeKey, dh, edPublicToX25519, encodeKey, identityOfSeed, kdfCk, kdfRk, kdfX3dh, messageKeys, x25519Public } from '../../src/sessions/keys.ts'
@@ -80,7 +80,7 @@ export function signBundle (id: PayeeIdentity, keys: PayeeSessionKeys): PreKeyBu
     identityKey: id.edPublic,
     signedPreKeyId: keys.signedPreKeyId,
     signedPreKey,
-    signedPreKeySignature: ed25519.sign(encodeKey(signedPreKey), id.seed)
+    signedPreKeySignature: ed25519.sign(signedPreKeySignedBytes(keys.signedPreKeyId, signedPreKey), id.seed)
   }
 }
 

@@ -55,7 +55,7 @@ export {
 } from './anchor.ts'
 export type { AnchorRecord, AnchorLookup, FetchedAnchor } from './anchor.ts'
 
-export { encodeBundle, decodeBundle, verifyBundle, fetchBundle } from './sessions/bundle.ts'
+export { encodeBundle, decodeBundle, verifyBundle, fetchBundle, signedPreKeySignedBytes, BUNDLE_VERSION } from './sessions/bundle.ts'
 export type { PreKeyBundle } from './sessions/bundle.ts'
 export {
   encodeOneTimeKeyItem, decodeOneTimeKeyItem, verifyOneTimeKeyItem, oneTimeKeySignedBytes, withOneTimeKey, ONE_TIME_KEY_LABEL
