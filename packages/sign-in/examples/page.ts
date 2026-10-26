@@ -4,7 +4,11 @@ import { mountSignIn } from '@spiffyvault/sign-in/browser'
 const me = await (await fetch('/me')).json() as { publicKey?: string }
 const box = document.getElementById('sign-in')!
 if (me.publicKey !== undefined) {
-  box.textContent = `Signed in. Your key for this site: ${me.publicKey}`
+  box.textContent = `Signed in. Your key for this site: ${me.publicKey} `
+  const out = document.createElement('a')
+  out.href = '/sign-out'
+  out.textContent = 'Sign out'
+  box.append(out)
 } else {
   const mode = new URLSearchParams(location.search).get('mode')
   mountSignIn(box, {

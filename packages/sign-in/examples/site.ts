@@ -10,7 +10,7 @@
  *
  * Endpoints: POST /sign-in/start (sets the browser cookie), GET
  * /sign-in/poll, POST /sign-in/callback (the app), GET /sign-in/return
- * (mode return), GET /me.
+ * (mode return), GET /me, GET /sign-out.
  */
 
 import { createServer } from 'node:http'
@@ -91,6 +91,10 @@ export async function startExampleSite (opts: { port?: number, publicUrl?: strin
           try { json = JSON.parse(await body(req)) } catch { json = null }
           const reply = await site.answer(json)
           send(res, reply.status, reply.body)
+        } else if (req.method === 'GET' && url.pathname === '/sign-out') {
+          sessions.delete(jar.sv_session ?? '')
+          res.writeHead(303, { location: '/', 'set-cookie': 'sv_session=; Max-Age=0; Path=/' })
+          res.end()
         } else if (req.method === 'GET' && url.pathname === '/sign-in/return') {
           const key = await site.redeem(url.searchParams.get('t') ?? '')
           if (key === undefined) { send(res, 410, { error: 'used or unknown' }); return }
