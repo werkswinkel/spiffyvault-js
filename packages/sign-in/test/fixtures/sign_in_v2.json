@@ -41,17 +41,17 @@
         "nonce": "EBESExQVFhcYGRobHB0eHw",
         "ts": 1793000060,
         "mode": "return",
-        "callback": "https://login.shop.example/api/sign-in/callback",
+        "callback": "https://shop.example/api/sign-in/callback",
         "name": "Example Shop"
       },
-      "link": "spiffyvault://auth?c=eyJ2IjoyLCJkb21haW4iOiJzaG9wLmV4YW1wbGUiLCJub25jZSI6IkVCRVNFeFFWRmhjWUdSb2JIQjBlSHciLCJ0cyI6MTc5MzAwMDA2MCwibW9kZSI6InJldHVybiIsImNhbGxiYWNrIjoiaHR0cHM6Ly9sb2dpbi5zaG9wLmV4YW1wbGUvYXBpL3NpZ24taW4vY2FsbGJhY2siLCJuYW1lIjoiRXhhbXBsZSBTaG9wIn0",
-      "signedText": "OIAP-v2\nshop.example\nEBESExQVFhcYGRobHB0eHw\n1793000060\nreturn\nhttps://login.shop.example/api/sign-in/callback\nExample Shop\n\n",
-      "signature": "5ad4a46da74bd17830a9a045eb586a07e3c0099905df21576d7ec343fe36ae86b18fc9610a27a06911c2665ce93514538b5c8d96637fe17697c35388924c7a02",
+      "link": "spiffyvault://auth?c=eyJ2IjoyLCJkb21haW4iOiJzaG9wLmV4YW1wbGUiLCJub25jZSI6IkVCRVNFeFFWRmhjWUdSb2JIQjBlSHciLCJ0cyI6MTc5MzAwMDA2MCwibW9kZSI6InJldHVybiIsImNhbGxiYWNrIjoiaHR0cHM6Ly9zaG9wLmV4YW1wbGUvYXBpL3NpZ24taW4vY2FsbGJhY2siLCJuYW1lIjoiRXhhbXBsZSBTaG9wIn0",
+      "signedText": "OIAP-v2\nshop.example\nEBESExQVFhcYGRobHB0eHw\n1793000060\nreturn\nhttps://shop.example/api/sign-in/callback\nExample Shop\n\n",
+      "signature": "bfcf0af3c0a55021ab0ad34f91257ec837de92be625e76e9653b88d9860b096ab47db70a205811e1b827664fa9538f3315251e6803812509df0888944d633005",
       "response": {
         "v": 2,
         "nonce": "EBESExQVFhcYGRobHB0eHw",
         "public_key": "ada46d5e68c74c93c68043bfb359a86bb8a1928a3540f2a7d8949d7bb41cafee",
-        "signature": "5ad4a46da74bd17830a9a045eb586a07e3c0099905df21576d7ec343fe36ae86b18fc9610a27a06911c2665ce93514538b5c8d96637fe17697c35388924c7a02"
+        "signature": "bfcf0af3c0a55021ab0ad34f91257ec837de92be625e76e9653b88d9860b096ab47db70a205811e1b827664fa9538f3315251e6803812509df0888944d633005"
       }
     }
   },
@@ -152,6 +152,26 @@
       "ts": 1793000000,
       "mode": "code",
       "callback": "https://evil.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "callback on a subdomain": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://login.shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "domain of one label": {
+      "v": 2,
+      "domain": "example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://example/api/sign-in/callback",
       "name": "Example Shop",
       "place": "Lagos, Nigeria"
     },

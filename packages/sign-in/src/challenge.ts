@@ -80,8 +80,9 @@ export function isLocalHost (host: string): boolean {
 
 /**
  * Section 2, rules 3 and 4: `url` may be used for `domain` (a callback or
- * a return link): https on the domain or a subdomain, or, for development,
- * http or https on exactly a local `domain`.
+ * a return link): https on exactly the domain, which has at least two
+ * labels, or, for development, http or https on exactly a local `domain`.
+ * A subdomain is refused: it would get the parent's site key.
  */
 export function checkSiteUrl (url: string, domain: string): void {
   let u: URL
@@ -96,8 +97,9 @@ export function checkSiteUrl (url: string, domain: string): void {
     if ((u.protocol !== 'http:' && u.protocol !== 'https:') || host !== domain) throw new ChallengeError(`"${host}" is not the local domain "${domain}"`)
     return
   }
+  if (!domain.includes('.')) throw new ChallengeError(`"${domain}" is not a site's domain`)
   if (u.protocol !== 'https:') throw new ChallengeError(`${url} does not use HTTPS`)
-  if (host !== domain && !host.endsWith(`.${domain}`)) throw new ChallengeError(`"${host}" is not on the domain "${domain}"`)
+  if (host !== domain) throw new ChallengeError(`"${host}" is not the domain "${domain}"`)
 }
 
 /** Section 2: the callback rule and `|now - ts| <= 300`. `now` in Unix seconds. */

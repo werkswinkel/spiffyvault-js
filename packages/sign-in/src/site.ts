@@ -70,7 +70,7 @@ export class MemoryStore implements SignInStore {
 export interface SignInSiteOptions {
   /** The site's domain as challenges name it; the site key is made from it, so keep it. */
   domain: string
-  /** Where the app posts its response: https on `domain` or a subdomain. */
+  /** Where the app posts its response: https on exactly `domain`. */
   callback: string
   /** The site's name as the app shows it, 1 to 64 characters. */
   name: string
