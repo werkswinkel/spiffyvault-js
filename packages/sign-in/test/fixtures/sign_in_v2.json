@@ -1,0 +1,251 @@
+{
+  "protocol": "OIAP-v2",
+  "identitySeed": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+  "sites": {
+    "shop.example": {
+      "seed": "6c3b1d357eab62723b1be524a307d776620d92196b5bb01738d012495fafbb03",
+      "publicKey": "ada46d5e68c74c93c68043bfb359a86bb8a1928a3540f2a7d8949d7bb41cafee"
+    },
+    "login.shop.example": {
+      "seed": "47f70b3f3f3425c8d8a729416bde41fb758a698a780535d40ea908676b413dcf",
+      "publicKey": "20a3207b7d5f0d238a463c2fbaad1015bf3f7e267b4771f17c7cdb28231b9375"
+    }
+  },
+  "challenges": {
+    "code": {
+      "challenge": {
+        "v": 2,
+        "domain": "shop.example",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "ts": 1793000000,
+        "mode": "code",
+        "callback": "https://shop.example/api/sign-in/callback",
+        "name": "Example Shop",
+        "place": "Lagos, Nigeria"
+      },
+      "link": "spiffyvault://auth?c=eyJ2IjoyLCJkb21haW4iOiJzaG9wLmV4YW1wbGUiLCJub25jZSI6IkFBRUNBd1FGQmdjSUNRb0xEQTBPRHciLCJ0cyI6MTc5MzAwMDAwMCwibW9kZSI6ImNvZGUiLCJjYWxsYmFjayI6Imh0dHBzOi8vc2hvcC5leGFtcGxlL2FwaS9zaWduLWluL2NhbGxiYWNrIiwibmFtZSI6IkV4YW1wbGUgU2hvcCIsInBsYWNlIjoiTGFnb3MsIE5pZ2VyaWEifQ",
+      "code": "042917",
+      "signedText": "OIAP-v2\nshop.example\nAAECAwQFBgcICQoLDA0ODw\n1793000000\ncode\nhttps://shop.example/api/sign-in/callback\nExample Shop\nLagos, Nigeria\n042917",
+      "signature": "49dc29482c51bd47bd468d93753dba116cb66483584c9a813dce000e0c4b1fa4cdad0a845c54b70667ae0496a89ba48576021fcf754de6b5935562b0ddeab70d",
+      "response": {
+        "v": 2,
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "public_key": "ada46d5e68c74c93c68043bfb359a86bb8a1928a3540f2a7d8949d7bb41cafee",
+        "signature": "49dc29482c51bd47bd468d93753dba116cb66483584c9a813dce000e0c4b1fa4cdad0a845c54b70667ae0496a89ba48576021fcf754de6b5935562b0ddeab70d"
+      }
+    },
+    "return": {
+      "challenge": {
+        "v": 2,
+        "domain": "shop.example",
+        "nonce": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1793000060,
+        "mode": "return",
+        "callback": "https://login.shop.example/api/sign-in/callback",
+        "name": "Example Shop"
+      },
+      "link": "spiffyvault://auth?c=eyJ2IjoyLCJkb21haW4iOiJzaG9wLmV4YW1wbGUiLCJub25jZSI6IkVCRVNFeFFWRmhjWUdSb2JIQjBlSHciLCJ0cyI6MTc5MzAwMDA2MCwibW9kZSI6InJldHVybiIsImNhbGxiYWNrIjoiaHR0cHM6Ly9sb2dpbi5zaG9wLmV4YW1wbGUvYXBpL3NpZ24taW4vY2FsbGJhY2siLCJuYW1lIjoiRXhhbXBsZSBTaG9wIn0",
+      "signedText": "OIAP-v2\nshop.example\nEBESExQVFhcYGRobHB0eHw\n1793000060\nreturn\nhttps://login.shop.example/api/sign-in/callback\nExample Shop\n\n",
+      "signature": "5ad4a46da74bd17830a9a045eb586a07e3c0099905df21576d7ec343fe36ae86b18fc9610a27a06911c2665ce93514538b5c8d96637fe17697c35388924c7a02",
+      "response": {
+        "v": 2,
+        "nonce": "EBESExQVFhcYGRobHB0eHw",
+        "public_key": "ada46d5e68c74c93c68043bfb359a86bb8a1928a3540f2a7d8949d7bb41cafee",
+        "signature": "5ad4a46da74bd17830a9a045eb586a07e3c0099905df21576d7ec343fe36ae86b18fc9610a27a06911c2665ce93514538b5c8d96637fe17697c35388924c7a02"
+      }
+    }
+  },
+  "refused": {
+    "version 1": {
+      "v": 1,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "no version": {
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "domain with capitals": {
+      "v": 2,
+      "domain": "Shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "domain with a port": {
+      "v": 2,
+      "domain": "shop.example:443",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "nonce too short": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0OD",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "nonce with other characters": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0OD+",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "ts as a string": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": "1793000000",
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "unknown mode": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "push",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "callback over http": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "http://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "callback on another host": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://evil.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "callback on a look-alike host": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://evilshop.example/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "callback on a private address": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "http://192.168.1.5/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "callback with a user name": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://user@shop.example/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "name with a line break": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example\nShop",
+      "place": "Lagos, Nigeria"
+    },
+    "name too long": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "place": "Lagos, Nigeria"
+    },
+    "empty name": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": " ",
+      "place": "Lagos, Nigeria"
+    },
+    "place with a line break": {
+      "v": 2,
+      "domain": "shop.example",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "https://shop.example/api/sign-in/callback",
+      "name": "Example Shop",
+      "place": "Lagos\nNigeria"
+    }
+  },
+  "local": {
+    "localhost over http": {
+      "v": 2,
+      "domain": "localhost",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "http://localhost:8787/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    },
+    "private address over http": {
+      "v": 2,
+      "domain": "192.168.1.5",
+      "nonce": "AAECAwQFBgcICQoLDA0ODw",
+      "ts": 1793000000,
+      "mode": "code",
+      "callback": "http://192.168.1.5:8787/callback",
+      "name": "Example Shop",
+      "place": "Lagos, Nigeria"
+    }
+  }
+}
