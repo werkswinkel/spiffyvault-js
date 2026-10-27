@@ -35,6 +35,7 @@ export const MAX_DOMAIN_NAME = 60
 
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
 const IPV4 = /^\d+(\.\d+){3}$/
+const ENTRY_KEY = /^0[23][0-9a-f]{64}$/
 
 /**
  * `text` as a link's domain: a host name in lower case, ASCII (an
@@ -198,6 +199,12 @@ export function verifyDomainFile (body: Uint8Array | string, params: Omit<Domain
     const entryPeer = e.peerId
     const entryKey = lower(e.paymentKey)
     if (typeof entryPeer !== 'string') continue
+    // The key goes into the signed text between the peer ID and the
+    // networks: one that is not a key is refused before it gets there.
+    if (e.paymentKey != null && (entryKey === undefined || !ENTRY_KEY.test(entryKey))) {
+      problem = 'bad-file'
+      continue
+    }
     if (key !== undefined && entryKey !== key) continue
     const nets = e.networks
     if (!Array.isArray(nets) || !nets.every(n => typeof n === 'string')) {

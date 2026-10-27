@@ -95,6 +95,16 @@ test('refuses an entry signed for another domain, edited after signing, or signe
   assert.equal((v(JSON.stringify(forged)) as { problem: string }).problem, 'bad-signature')
 })
 
+test('refuses an entry whose payment key is not a key, even signed (review finding 5)', async () => {
+  const { shop, text: spaced } = await shopFile({ key: '02a1633c afcc' })
+  const v = (text: string) => verifyDomainFile(text, { domain: 'shop.example', peerId: shop.peerId, network: 'testnet' })
+  assert.equal((v(spaced) as { problem: string }).problem, 'bad-file')
+
+  const numbered = JSON.parse((await shopFile({ key: null })).text)
+  numbered.payees[0].paymentKey = 123
+  assert.equal((v(JSON.stringify(numbered)) as { problem: string }).problem, 'bad-file')
+})
+
 test('tells no file, a bad file, a large file and no answer apart', async () => {
   const problem = async (fetch: DomainFetch) => {
     const r = await checkPayeeDomain({ domain: 'shop.example', peerId: SHOP_PEER, network: 'testnet', fetch })

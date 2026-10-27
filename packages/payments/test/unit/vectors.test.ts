@@ -1,6 +1,6 @@
 /**
- * Byte compatibility with the app: the identity of Appendix C and the
- * app's anchor vectors (peer sessions are peer-sessions.test.ts).
+ * Byte compatibility with the app: the identity of Appendix C, and the
+ * app's anchor and link vectors (peer sessions are peer-sessions.test.ts).
  */
 
 import { test } from 'node:test'
@@ -11,6 +11,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import {
   anchorContextHex, anchorRecordJson, anchorSignedText, deriveOfflineDestination, parseAnchorRecord, toHex, utf8, verifyAnchorRecord
 } from '../support/internals.ts'
+import { isPaymentLinkText, linkSignedText, parsePaymentLink } from '../../src/index.ts'
 import { C } from '../fixtures/appendix-c.ts'
 import { identityFromPhrase } from '../support/payee.ts'
 
@@ -73,4 +74,34 @@ test('BRC-42 offline destination: the go-sdk BRC-29 pin libspiffy tests', () => 
   const fresh = deriveOfflineDestination(anchorPub, 'ctx', 'mainnet')
   assert.match(fresh.derivation.invoiceNumber, /^2-3241645161d8-[A-Za-z0-9+/]{22}== [A-Za-z0-9+/]{22}==$/)
   assert.match(fresh.address, /^1/)
+})
+
+// The app's link vectors (test/vectors/payment_links_v1.json): links read
+// to the app's signed text, and links the app refuses.
+const linkText = readFileSync(new URL('../fixtures/payment_links_v1.json', import.meta.url), 'utf8')
+const L = JSON.parse(linkText)
+
+test('link vectors: the file is the one its hash names', () => {
+  const written = readFileSync(new URL('../fixtures/payment_links_v1.json.sha256', import.meta.url), 'utf8').trim()
+  assert.equal(toHex(sha256(utf8(linkText))), written)
+})
+
+for (const c of L.read as Array<{ name: string, link: string, signedText: string }>) {
+  test(`link vectors, reads: ${c.name}`, () => {
+    const link = parsePaymentLink(c.link)
+    assert.ok(link !== null)
+    assert.equal(linkSignedText(link), c.signedText)
+  })
+}
+
+for (const c of L.refused as Array<{ name: string, link: string }>) {
+  test(`link vectors, refuses: ${c.name}`, () => {
+    assert.equal(parsePaymentLink(c.link), null)
+    assert.ok(isPaymentLinkText(c.link), 'a broken payment link, not a code that is not ours')
+  })
+}
+
+test('a NEL around the whole link is trimmed, as Dart trims it', () => {
+  const link = (L.read as Array<{ link: string, signedText: string }>)[0]!
+  assert.equal(linkSignedText(parsePaymentLink(`\u0085${link.link}\u0085`)!), link.signedText)
 })

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "about": "Payment link parsing (doc/payment-protocol.md 1.1 and 7.1): links every implementation reads to this signed text, and links every implementation refuses.",
+  "read": [
+    {
+      "name": "plain",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&a=2500&m=Coffee&d=shop.example",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=2500\nm=Coffee\nw=\nwl=\nr=\nd=shop.example"
+    },
+    {
+      "name": "a NEL (U+0085) after the note is dropped, not trimmed differently",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=Coffee%C2%85",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=Coffee\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "a NEL after the network is dropped",
+      "link": "https://spiffyvault.net/pay?n=testnet%C2%85&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "a C0 control inside the note is dropped",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=Cof%01fee",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=Coffee\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "a tab inside the note is a space, as before",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=Cof%09fee",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=Cof fee\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "DEL and a C1 control in the wallet name are dropped",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&w=till&wl=Front%7F%C2%9Fdesk",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=\nw=till\nwl=Frontdesk\nr=\nd="
+    },
+    {
+      "name": "an escaped percent is text",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=100%25",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=100%\nw=\nwl=\nr=\nd="
+    }
+  ],
+  "refused": [
+    {
+      "name": "a malformed escape",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=100%zz"
+    },
+    {
+      "name": "a percent at the end",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=100%"
+    },
+    {
+      "name": "an escape that is not UTF-8",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=%E2%82"
+    },
+    {
+      "name": "the peer ID as a CID",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=bafzaajaiaejcae4xdwml7vjzwo66hetybi2qem6mvnkfxw6zeumwt3kxje6zgwhe"
+    },
+    {
+      "name": "a peer ID that is not Ed25519",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=16Uiu2HAm3cuhhRL2msUuLF62KRSfneFDx94RsuouyW25Ho42cFMq"
+    }
+  ]
+}

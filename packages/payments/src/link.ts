@@ -149,7 +149,17 @@ export function refusesBareKey (parsed: ParsedPaymentKey, ourNetwork: string): b
 // Links
 // ---------------------------------------------------------------------------
 
-/** Dart's Uri.splitQueryString: '&'-separated, '+' is a space, the last of a repeated key wins. */
+/**
+ * The C0 and C1 control characters that are not whitespace to `\s`,
+ * dropped from every value before it is trimmed: Dart's trim() strips NEL
+ * (U+0085) and JavaScript's does not, so the app drops them too.
+ */
+const CONTROLS = /[\x00-\x08\x0E-\x1F\x7F-\x9F]/g
+
+/**
+ * Dart's Uri.splitQueryString: '&'-separated, '+' is a space, the last of a
+ * repeated key wins; every value without its control characters.
+ */
 function splitQuery (query: string): Map<string, string> | null {
   const map = new Map<string, string>()
   try {
@@ -159,11 +169,11 @@ function splitQuery (query: string): Map<string, string> | null {
       if (i === -1) {
         if (element !== '') map.set(dec(element), '')
       } else if (i !== 0) {
-        map.set(dec(element.slice(0, i)), dec(element.slice(i + 1)))
+        map.set(dec(element.slice(0, i)), dec(element.slice(i + 1)).replace(CONTROLS, ''))
       }
     }
   } catch {
-    return null // a malformed %-escape; Dart throws here
+    return null // a malformed %-escape, or one that is not UTF-8: the app refuses both
   }
   return map
 }
@@ -180,9 +190,12 @@ function splitUri (text: string): Parts | null {
 
 const trimSlash = (p: string): string => p.endsWith('/') ? p.slice(0, -1) : p
 
+/** Dart's String.trim(): JavaScript's whitespace, and NEL (U+0085). */
+const dartTrim = (t: string): string => t.replace(/^[\s\x85]+|[\s\x85]+$/g, '')
+
 /** True when `text` has the shape of a payment link, valid or not. */
 export function isPaymentLinkText (text: string): boolean {
-  const u = splitUri(text.trim())
+  const u = splitUri(dartTrim(text))
   return u !== null && isLinkShape(u)
 }
 
@@ -205,8 +218,12 @@ function clean (text: string | undefined, max: number): string | undefined {
   return runeLength(m) > max ? takeRunes(m, max) : m
 }
 
+/**
+ * An Ed25519 peer ID in base58 (`12D3KooW…`), the one form a link's
+ * signature can be checked against; a CID or another key type is not.
+ */
 function validPeerId (value: string): boolean {
-  try { peerIdFromString(value); return true } catch { return false }
+  try { return ed25519KeyOfPeerId(value) !== null && peerIdFromString(value).toString() === value } catch { return false }
 }
 
 /** Dart's int.tryParse without a radix: optional sign, decimal or 0x hex. */
@@ -229,7 +246,7 @@ function dartInt (text: string): number | null {
  * signature: linkSignatureValid() does.
  */
 export function parsePaymentLink (text: string): PaymentLink | null {
-  const u = splitUri(text.trim())
+  const u = splitUri(dartTrim(text))
   if (u === null || !isLinkShape(u)) return null
   const q = splitQuery(u.query)
   if (q === null) return null
