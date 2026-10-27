@@ -17,6 +17,19 @@ export function canonicalNetwork (network: string | null | undefined): Network {
   return 'testnet'
 }
 
+/**
+ * A network name in a domain file, as the app reads it: null for any other
+ * spelling, so that a typo is not a testnet entry (assessment finding 9).
+ */
+export function fileNetwork (value: string): Network | null {
+  switch (value.trim().toLowerCase()) {
+    case 'mainnet': case 'main': case 'livenet': return 'mainnet'
+    case 'testnet': case 'test': return 'testnet'
+    case 'regtest': return 'regtest'
+    default: return null
+  }
+}
+
 /** The link's `n` values the app reads; null for anything else. */
 export function linkNetwork (value: string | null | undefined): Network | null {
   switch (value?.trim().toLowerCase()) {

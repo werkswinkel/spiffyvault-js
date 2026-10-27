@@ -71,6 +71,19 @@ test('signs entries the app accepts: byte for byte the app\'s own for the same i
   assert.equal(domainFileText([entry]), DART_SEED7_FILE)
 })
 
+test('a network spelled wrong makes the entry a bad file, not a testnet one (assessment finding 9)', async () => {
+  const { shop, text } = await shopFile()
+  const spelled = (n: string): string => {
+    const f = JSON.parse(text) as { payees: Array<{ networks: string[] }> }
+    f.payees[0]!.networks = [n]
+    return JSON.stringify(f)
+  }
+  const check = (t: string) => checkPayeeDomain({ domain: 'shop.example', peerId: shop.peerId, network: 'testnet', fetch: serve(t) })
+  assert.deepEqual(await check(spelled('tesnet')), { verified: false, domain: 'shop.example', problem: 'bad-file' })
+  assert.equal((await check(spelled('Testnet '))).verified, true)
+  await assert.rejects(domainEntry({ domain: 'shop.example', peerId: shop.peerId, networks: ['mainet'] }, shop.libp2pKey), TypeError)
+})
+
 test('a shop name is shown without invisible format characters, as the app shows it (review finding 11)', async () => {
   const shop = await identityFromSeed(fill(7))
   const text = domainFileText([await domainEntry({ domain: 'shop.example', peerId: shop.peerId, networks: ['testnet'], name: 'Corner \u202EpohS\u202C\u200B' }, shop.libp2pKey)])

@@ -21,7 +21,8 @@
 
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { INVISIBLE_FORMAT, fromHex, runeLength, takeRunes, toHex, utf8 } from './bytes.ts'
-import { canonicalNetwork } from './networks.ts'
+import { canonicalNetwork, fileNetwork } from './networks.ts'
+import type { Network } from './networks.ts'
 import { ed25519KeyOfPeerId } from './peer.ts'
 
 export const DOMAIN_FILE_VERSION = 1
@@ -92,7 +93,11 @@ export interface DomainEntryParams {
 export async function domainEntry (params: DomainEntryParams, signer: PeerKeySigner): Promise<DomainFileEntry> {
   const domain = normalizeDomain(params.domain)
   if (domain === null) throw new TypeError(`not a domain: ${params.domain}`)
-  const networks = params.networks.map(n => canonicalNetwork(n))
+  const networks = params.networks.map(n => {
+    const net = fileNetwork(n)
+    if (net === null) throw new TypeError(`not a network: ${n}`)
+    return net
+  })
   const paymentKey = params.paymentKey?.toLowerCase()
   const text = domainSignedText(domain, params.peerId, paymentKey, networks)
   const sig = toHex(await signer.sign(utf8(text)))
@@ -211,7 +216,12 @@ export function verifyDomainFile (body: Uint8Array | string, params: Omit<Domain
       problem = 'bad-file'
       continue
     }
-    const canonical = (nets as string[]).map(n => canonicalNetwork(n))
+    const read = (nets as string[]).map(fileNetwork)
+    if (read.includes(null)) {
+      problem = 'bad-file'
+      continue
+    }
+    const canonical = read as Network[]
     if (!canonical.includes(net)) {
       problem = 'other-network'
       continue
