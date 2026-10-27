@@ -12,14 +12,22 @@ permissions:
 jobs:
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Actions pinned by commit, not by a tag that can be moved.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22.18'
           cache: npm
       - run: npm ci
-      - name: Unit tests
+      - name: Types, sources and tests
+        run: npm run typecheck
+      - name: Payments unit tests
         run: npm run test:unit --workspace @spiffyvault/payments
+      - name: Sign-in unit tests
+        run: npm run test:unit --workspace @spiffyvault/sign-in
       - name: Browser bundle has no Node built-ins
         run: npm run check:bundle --workspace @spiffyvault/payments
