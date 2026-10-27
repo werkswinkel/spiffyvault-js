@@ -57,7 +57,7 @@ test('network names: the documented spellings, nothing else', () => {
 })
 
 test('a payer network spelled wrong is refused, not paid as testnet', async () => {
-  await assert.rejects(planPayment({ peerId: PEER, network: 'testnet', amountSats: 10 }, { network: 'mainet' }),
+  await assert.rejects(planPayment({ peerId: PEER, network: 'testnet', amountSats: 10 }, { network: 'mainet' as never }), // a plain JavaScript caller
     (e: PaymentError) => e.code === 'no-route' && /mainet/.test(e.message))
   await assert.rejects(planPayment({ peerId: PEER, network: 'testnett', amountSats: 10 }, { network: 'testnet' }),
     (e: PaymentError) => e.code === 'no-route' && /testnett/.test(e.message))
