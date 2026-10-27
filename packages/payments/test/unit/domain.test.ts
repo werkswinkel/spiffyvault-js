@@ -71,6 +71,13 @@ test('signs entries the app accepts: byte for byte the app\'s own for the same i
   assert.equal(domainFileText([entry]), DART_SEED7_FILE)
 })
 
+test('a shop name is shown without invisible format characters, as the app shows it (review finding 11)', async () => {
+  const shop = await identityFromSeed(fill(7))
+  const text = domainFileText([await domainEntry({ domain: 'shop.example', peerId: shop.peerId, networks: ['testnet'], name: 'Corner \u202EpohS\u202C\u200B' }, shop.libp2pKey)])
+  const r = await checkPayeeDomain({ domain: 'shop.example', peerId: shop.peerId, network: 'testnet', fetch: serve(text) })
+  assert.deepEqual(r, { verified: true, domain: 'shop.example', name: 'Corner pohS' })
+})
+
 test('the check passes for a payee the domain lists, by peer ID or by key alone', async () => {
   const { shop, text } = await shopFile()
   assert.deepEqual(await checkPayeeDomain({ domain: 'shop.example', peerId: shop.peerId, paymentKey: KEY, network: 'testnet', fetch: serve(text) }),

@@ -8,7 +8,7 @@
 
 import { peerIdFromString } from '@libp2p/peer-id'
 import { ed25519 } from '@noble/curves/ed25519.js'
-import { runeLength, takeRunes, utf8 } from './bytes.ts'
+import { INVISIBLE_FORMAT, runeLength, takeRunes, utf8 } from './bytes.ts'
 import { normalizeDomain } from './domain.ts'
 import { NetworkMismatchError } from './errors.ts'
 import { canonicalNetwork, linkNetwork } from './networks.ts'
@@ -150,11 +150,13 @@ export function refusesBareKey (parsed: ParsedPaymentKey, ourNetwork: string): b
 // ---------------------------------------------------------------------------
 
 /**
- * The C0 and C1 control characters that are not whitespace to `\s`,
- * dropped from every value before it is trimmed: Dart's trim() strips NEL
- * (U+0085) and JavaScript's does not, so the app drops them too.
+ * Dropped from every value before it is trimmed: the C0 and C1 control
+ * characters that are not whitespace to `\s` (Dart's trim() strips NEL,
+ * U+0085, and JavaScript's does not, so the app drops them too), and
+ * {@link INVISIBLE_FORMAT}.
  */
-const CONTROLS = /[\x00-\x08\x0E-\x1F\x7F-\x9F]/g
+// eslint-disable-next-line no-control-regex
+const CONTROLS = new RegExp(String.raw`[\x00-\x08\x0E-\x1F\x7F-\x9F]|` + INVISIBLE_FORMAT, 'g')
 
 /**
  * Dart's Uri.splitQueryString: '&'-separated, '+' is a space, the last of a
@@ -213,7 +215,7 @@ function blank (v: string | undefined): string | undefined {
 }
 
 function clean (text: string | undefined, max: number): string | undefined {
-  const m = text?.replace(/\s+/g, ' ').trim()
+  const m = text?.replace(CONTROLS, '').replace(/\s+/g, ' ').trim()
   if (m === undefined || m === '') return undefined
   return runeLength(m) > max ? takeRunes(m, max) : m
 }

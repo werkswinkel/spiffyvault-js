@@ -42,8 +42,11 @@ const NONCE = /^[A-Za-z0-9_-]{22,128}$/
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/
 
+/** Invisible format characters, as the app refuses them (payments' INVISIBLE_FORMAT). */
+const INVISIBLE = new RegExp(String.raw`[\u00AD\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]`)
+
 const isLabel = (s: unknown): s is string =>
-  typeof s === 'string' && s.trim() !== '' && [...s].length <= 64 && !CONTROL.test(s)
+  typeof s === 'string' && s.trim() !== '' && [...s].length <= 64 && !CONTROL.test(s) && !INVISIBLE.test(s)
 
 /** The challenge in `json` (section 1), or a ChallengeError saying what is wrong. */
 export function readChallenge (json: unknown): Challenge {

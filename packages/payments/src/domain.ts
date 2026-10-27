@@ -20,7 +20,7 @@
  */
 
 import { ed25519 } from '@noble/curves/ed25519.js'
-import { fromHex, runeLength, takeRunes, toHex, utf8 } from './bytes.ts'
+import { INVISIBLE_FORMAT, fromHex, runeLength, takeRunes, toHex, utf8 } from './bytes.ts'
 import { canonicalNetwork } from './networks.ts'
 import { ed25519KeyOfPeerId } from './peer.ts'
 
@@ -241,8 +241,11 @@ function verifySig (peerId: string, text: string, sig: unknown): boolean {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const lower = (v: unknown): string | undefined => typeof v === 'string' ? v.toLowerCase() : undefined
 
+const INVISIBLE = new RegExp(INVISIBLE_FORMAT, 'g')
+
+/** The name as it is shown: without invisible format characters, whitespace collapsed. */
 function cleanName (name: string | undefined): string | undefined {
-  const n = name?.replace(/\s+/g, ' ').trim()
+  const n = name?.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim()
   if (n === undefined || n === '') return undefined
   return runeLength(n) > MAX_DOMAIN_NAME ? takeRunes(n, MAX_DOMAIN_NAME) : n
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Payment link parsing (doc/payment-protocol.md 1.1 and 7.1): links every implementation reads to this signed text, and links every implementation refuses.",
+  "about": "Payment link parsing (doc/payment-protocol.md 1.1 and 7.1): links every implementation reads to this signed text (control and invisible format characters dropped), and links every implementation refuses.",
   "read": [
     {
       "name": "plain",
@@ -36,6 +36,26 @@
       "name": "an escaped percent is text",
       "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=100%25",
       "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=100%\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "a right-to-left override in the note is dropped",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=Coffee%E2%80%AEeef",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=Coffeeeef\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "a zero-width space, a byte-order mark and a tag character in the note are dropped",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=Cof%E2%80%8Bfee%EF%BB%BF%F3%A0%81%81",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=Coffee\nw=\nwl=\nr=\nd="
+    },
+    {
+      "name": "bidi isolates in the wallet name are dropped",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&w=till&wl=Front%20%E2%81%A7desk%E2%81%A9",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=\nw=till\nwl=Front desk\nr=\nd="
+    },
+    {
+      "name": "the zero-width joiner of an emoji stays",
+      "link": "https://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&m=%F0%9F%91%A9%E2%80%8D%F0%9F%92%BB%20tip",
+      "signedText": "spiffyvault-link/1\nn=testnet\np=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT\nk=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\na=\nm=👩‍💻 tip\nw=\nwl=\nr=\nd="
     }
   ],
   "refused": [

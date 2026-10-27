@@ -116,3 +116,14 @@ export function runeLength (text: string): number { return Array.from(text).leng
 
 /** The first `n` code points of `text`. */
 export function takeRunes (text: string, n: number): string { return Array.from(text).slice(0, n).join('') }
+
+/**
+ * Invisible format characters (Unicode Cf) that a note or name could use to
+ * show other than it reads: bidi marks, embeddings, overrides and isolates,
+ * zero-width space, word joiners, the byte-order mark, the soft hyphen,
+ * annotation marks and tag characters (as UTF-16 surrogates). The zero-width
+ * joiner and non-joiner stay: emoji and some scripts need them, and they
+ * reorder nothing. The same as the app's and the Worker's
+ * (doc/payment-protocol.md 1.1).
+ */
+export const INVISIBLE_FORMAT = String.raw`[\u00AD\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]`
