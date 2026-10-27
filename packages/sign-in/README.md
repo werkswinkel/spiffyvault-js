@@ -11,7 +11,11 @@ site alone, signed for this one sign-in.
   app opens your one-time return link, and the browser that opens it is
   signed in.
 
-The protocol is SpiffyVault's `doc/sign-in.md`. Version 0.1.0 is not on npm.
+The protocol is SpiffyVault's `doc/sign-in.md`.
+
+```sh
+npm install @spiffyvault/sign-in
+```
 Node.js 22.18 or later, or any browser. ESM only.
 
 ## On your server

@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "Sign in with SpiffyVault (OIAP-v2): make and check sign-in challenges on your site, and show them in the browser as a QR code and a typed code, or as a link on the phone.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/werkswinkel/spiffyvault-js.git",
+    "directory": "packages/sign-in"
+  },
+  "homepage": "https://github.com/werkswinkel/spiffyvault-js/tree/main/packages/sign-in#readme",
+  "bugs": {
+    "url": "https://github.com/werkswinkel/spiffyvault-js/issues"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -26,7 +35,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json && npm run build && tsc -p tsconfig.test.json",
     "test": "npm run test:unit",
     "test:unit": "npm run build && node --test 'test/unit/**/*.test.ts'",
@@ -45,9 +54,7 @@
     "playwright": "1.64.1",
     "typescript": "5.9.3"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/werkswinkel/spiffyvault-js.git",
-    "directory": "packages/sign-in"
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -16,7 +16,12 @@ is copied from `examples/`, and the tests run those files.
 
 ## Install
 
-Version 0.1.0 is not on npm. Node.js 22.18 or later. ESM only.
+```sh
+npm install @spiffyvault/payments
+```
+
+Node.js 22.18 or later. ESM only. A beta for review: testnet only for now
+(see SECURITY.md in the repository).
 
 | Import | For | Adds |
 |---|---|---|
