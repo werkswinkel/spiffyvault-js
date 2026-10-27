@@ -40,7 +40,7 @@ export type { PeerPayParams, PeerPayContext, PeerPayToken, MessageBoxSender } fr
 export { isPeerId } from './peer.ts'
 export type { RicochetLike } from './ricochet.ts'
 
-export { payOffline } from './offline.ts'
+export { payOffline, OFFLINE_RECLAIM_SECONDS } from './offline.ts'
 export type { OfflinePayParams, OfflinePayContext } from './offline.ts'
 
 export { payLive } from './live/live.ts'

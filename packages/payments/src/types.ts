@@ -30,6 +30,12 @@ export interface PaymentResult {
   paymentId?: string
   /** Offline: the Ricochet message ID. PeerPay: the message box message ID. */
   messageId?: string
+  /**
+   * Offline: when the payment is reclaimed if the payee has not broadcast it
+   * by then (ms since 1970; about 3 days on). Absent with
+   * `offlineReclaimSeconds: false`.
+   */
+  reclaimAt?: number
   /** PeerPay: the output that pays the payee. */
   outputIndex?: number
   /** Earlier attempts on other paths that failed safely (pay() only). */

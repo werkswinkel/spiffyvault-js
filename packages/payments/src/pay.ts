@@ -82,6 +82,8 @@ export interface PayContext extends FundingContext {
   live?: Pick<LivePayContext, 'split' | 'maxFrameBytes' | 'timeouts'>
   /** Offline path: sealing options (fixed keys for tests). */
   seal?: SealOptions
+  /** Offline: reclaim after this many seconds (default 3 days), or false; see OfflinePayContext. */
+  offlineReclaimSeconds?: number | false
   /**
    * PeerPay: the message box host (default https://messagebox.bsvblockchain.tech),
    * an optional client, and whether pay() may fall back to it after live
@@ -248,7 +250,8 @@ export async function pay (req: PayRequest, ctx: PayContext): Promise<PaymentRes
           throw new PaymentError('no-route', 'Offline payments need the payer\'s identity key: pass identityKey, the private key of the Ricochet client\'s libp2p node', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
         }
         return await payOffline({ payeePeerId, ...common }, {
-          ...funding, ricochet, identityKey, ...(ctx.seal !== undefined ? { seal: ctx.seal } : {})
+          ...funding, ricochet, identityKey, ...(ctx.seal !== undefined ? { seal: ctx.seal } : {}),
+          ...(ctx.offlineReclaimSeconds !== undefined ? { offlineReclaimSeconds: ctx.offlineReclaimSeconds } : {})
         })
       })
       if (!(r instanceof PaymentError)) return r

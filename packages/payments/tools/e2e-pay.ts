@@ -14,9 +14,11 @@
  *       --peerpay-fallback     auto: allow PeerPay after live and offline failed safely
  *       --host <url>           message box host (default https://messagebox.bsvblockchain.tech)
  *       --dry-run              check everything that can be checked without spending, stop before createAction
+ *       --reclaim-seconds <n|off>  offline: reclaim after n seconds if the phone has not broadcast it (default 3 days, BRC-177)
  *       --ricochet <peerId>=<multiaddr>   another Ricochet server (tests; default SpiffyVault's)
  *   status <txid>              what the network says about a transaction
  *   abort <txid>               release the inputs of a payment the payee did NOT take (live/offline, not broadcast)
+ *   monitor [minutes]          run the wallet's monitor (default 10 min): it reclaims offline payments past their deadline
  *
  * The key file holds a 64-hex root private key. It is made (mode 0600) when
  * missing, and must be outside this repository. The wallet database is
@@ -177,7 +179,9 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
       return
     }
     say(`2. paying by ${mode}`)
-    const ctx = { wallet, onProgress: progress }
+    const reclaim = o['reclaim-seconds']
+    const offlineReclaimSeconds = reclaim === undefined ? undefined : reclaim === 'off' ? false as const : Number(reclaim)
+    const ctx = { wallet, onProgress: progress, ...(offlineReclaimSeconds !== undefined ? { offlineReclaimSeconds } : {}) }
     let r
     if (mode === 'live') r = await payLive({ payeePeerId: plan.peerId ?? fail('the link has no peer ID'), ...common }, { ...ctx, libp2p: node, relays })
     else if (mode === 'offline') r = await payOffline({ payeePeerId: plan.peerId ?? fail('the link has no peer ID'), ...common }, { ...ctx, ricochet, identityKey })
@@ -188,6 +192,7 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
     for (const a of r.attempts) say(`   earlier attempt: ${a.path ?? '?'} ${a.code}: ${a.message}`)
     if (r.path === 'live') say(`   the phone checked it by SPV${r.broadcasted === true ? ' and is broadcasting it' : ' (the network already holds it)'}`)
     if (r.path === 'offline') say('   it waits in the phone\'s mailbox; the phone broadcasts it when it collects (open the app; it pulls every 30 s)')
+    if (r.reclaimAt !== undefined) say(`   if the phone has not broadcast it by ${new Date(r.reclaimAt).toISOString()}, the wallet reclaims it: run \`node tools/e2e-pay.ts monitor\` after that`)
     if (r.path === 'peerpay') say('   broadcast by this wallet; the phone imports the token from its message box (it polls every 30 s)')
     say(`   follow it: node tools/e2e-pay.ts status ${r.txid}`)
   } catch (e) {
@@ -220,11 +225,32 @@ async function cmdAbort (path: string, txid: string | undefined): Promise<void> 
   } finally { await close(setup) }
 }
 
+async function cmdMonitor (path: string, minutes: string | undefined): Promise<void> {
+  const ms = Number(minutes ?? '10') * 60_000
+  if (!Number.isFinite(ms) || ms <= 0) fail('monitor [minutes]')
+  const { setup } = await openWallet(path)
+  say(`balance: ${await setup.wallet.balance()} sats; running the monitor for ${ms / 60_000} min`)
+  const monitor = setup.monitor
+  monitor.addDefaultTasks()
+  const running = monitor.startTasks()
+  const end = Date.now() + ms
+  let last = -1
+  while (Date.now() < end) {
+    await new Promise(resolve => setTimeout(resolve, 15_000))
+    const balance = await setup.wallet.balance()
+    if (balance !== last) say(`  ${new Date().toISOString()} balance ${balance} sats`)
+    last = balance
+  }
+  monitor.stopTasks()
+  await running.catch(() => {})
+  await close(setup)
+}
+
 const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
     path: { type: 'string' }, amount: { type: 'string' }, note: { type: 'string' }, host: { type: 'string' }, ricochet: { type: 'string' },
-    'dry-run': { type: 'boolean' }, 'peerpay-fallback': { type: 'boolean' }
+    'dry-run': { type: 'boolean' }, 'peerpay-fallback': { type: 'boolean' }, 'reclaim-seconds': { type: 'string' }
   }
 })
 const [command, arg] = positionals
@@ -235,6 +261,7 @@ switch (command) {
   case 'pay': await cmdPay(path, arg, values); break
   case 'status': await cmdStatus(path, arg); break
   case 'abort': await cmdAbort(path, arg); break
-  default: fail('commands: info | fund <txid>[:<vout>] | pay <link> [--path …] [--dry-run] | status <txid> | abort <txid>')
+  case 'monitor': await cmdMonitor(path, arg); break
+  default: fail('commands: info | fund <txid>[:<vout>] | pay <link> [--path …] [--dry-run] | status <txid> | abort <txid> | monitor [minutes]')
 }
 process.exit(process.exitCode ?? 0)

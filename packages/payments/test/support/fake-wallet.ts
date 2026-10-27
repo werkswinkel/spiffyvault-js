@@ -25,6 +25,10 @@ export interface FakeWalletOptions {
   unprovenDepth?: number
   /** Make createAction fail. */
   failCreate?: string
+  /** A wallet without BRC-111 module `nosend` (BRC-177): refuses a `p nosend …` label, as BRC-111 requires. */
+  noBrc177?: boolean
+  /** Answer abortAction with aborted: false, as Wallet Toolbox does for a payment the network holds. */
+  refuseAbort?: boolean
   /** Report the broadcast as failed. */
   failBroadcast?: boolean
   fee?: number
@@ -85,6 +89,7 @@ export class FakeWallet {
   async createAction (args: CreateActionArgs): Promise<CreateActionResult> {
     this.calls.push({ method: 'createAction', args })
     if (this.opts.failCreate !== undefined) throw new Error(this.opts.failCreate)
+    if (this.opts.noBrc177 === true && (args.labels ?? []).some(l => l.startsWith('p nosend'))) throw new Error('Unsupported permission module: nosend')
     const outputs = args.outputs ?? []
     const need = outputs.reduce((s, o) => s + o.satoshis, 0)
     const fee = this.opts.fee ?? 200
@@ -113,10 +118,11 @@ export class FakeWallet {
     return result
   }
 
-  async abortAction (args: AbortActionArgs): Promise<{ aborted: true }> {
+  async abortAction (args: AbortActionArgs): Promise<{ aborted: boolean }> {
     this.calls.push({ method: 'abortAction', args })
     const a = this.actions.get(args.reference)
     if (a === undefined || a.status !== 'nosend') throw new Error('not an abortable action')
+    if (this.opts.refuseAbort === true) return { aborted: false }
     a.status = 'aborted'
     a.coin.reserved = false
     return { aborted: true }

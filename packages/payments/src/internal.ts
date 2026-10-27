@@ -11,7 +11,7 @@ export { setDefaultDomainFetch } from './domain.ts'
 export { walletNetworkType, forNetwork, p2pkhVersion, OFFLINE_PAYMENTS_FOLDER, PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER, PAYMENT_ANCHOR_DOCUMENT } from './networks.ts'
 
 export {
-  toBeefV1, inspectBeefV1, checkAtomicBeefForPeerPay, beefKind, fundWithWallet, fundWithFunder, walletNetwork,
+  toBeefV1, inspectBeefV1, checkAtomicBeefForPeerPay, beefKind, fundWithWallet, fundWithFunder, noSendExpiryLabel, walletNetwork,
   BEEF_V1_MAGIC, BEEF_V2_MAGIC, ATOMIC_BEEF_MAGIC
 } from './funding.ts'
 export type { BeefKind } from './funding.ts'

@@ -31,6 +31,13 @@ export interface FundInfo {
   note?: string
   /** The payee, for the wallet's own records. */
   counterparty?: string
+  /**
+   * Offline: when the payment is to be reclaimed if the payee has not
+   * broadcast it by then (ms since 1970). A Funder that holds the inputs
+   * then spends them back to itself, so the payee's copy can no longer be
+   * broadcast; the app does this after 3 days.
+   */
+  reclaimAt?: number
 }
 
 /**
@@ -51,6 +58,14 @@ export interface FundedPayment {
   atomicBeef?: Uint8Array
   /** Releases the transaction's inputs; true when the wallet confirmed it. Safe to call once. */
   abort: () => Promise<boolean>
+  /** Offline: when the payment is reclaimed if the payee has not broadcast it (ms since 1970). */
+  reclaimAt?: number
+}
+
+/** The BRC-177 label that has a BRC-100 wallet reclaim a `noSend` payment after `seconds`. */
+export function noSendExpiryLabel (seconds: number): string {
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) throw new TypeError(`not a whole number of seconds above 0: ${seconds}`)
+  return `p nosend expiry seconds ${seconds}`
 }
 
 export const BEEF_V1_MAGIC = [0x01, 0x00, 0xbe, 0xef] as const
@@ -124,11 +139,18 @@ function fundingError (path: PaymentPath, message: string, cause?: unknown): Pay
  * outputs, `noSend` and `randomizeOutputs: false`; the result converted to
  * BEEF V1. abort() calls abortAction with the txid as reference (wallet-
  * toolbox accepts a txid there).
+ *
+ * With `expirySeconds`, the action carries the BRC-177 label: the wallet
+ * pays from one coin it makes for the payment, and spends that coin back
+ * to itself after the deadline unless the payment was seen on the network.
+ * A wallet without BRC-177 refuses the action (BRC-111).
  */
 export async function fundWithWallet (wallet: WalletInterface, outputs: PaymentOutput[], info: FundInfo,
-  extra: { description?: string, originator?: string } = {}): Promise<FundedPayment> {
+  extra: { description?: string, originator?: string, expirySeconds?: number } = {}): Promise<FundedPayment> {
+  const expiry = extra.expirySeconds !== undefined ? noSendExpiryLabel(extra.expirySeconds) : undefined
   const args: CreateActionArgs = {
     description: extra.description ?? 'SpiffyVault payment',
+    ...(expiry !== undefined ? { labels: [expiry] } : {}),
     outputs: outputs.map((o): CreateActionOutput => ({
       lockingScript: o.lockingScript,
       satoshis: o.satoshis,
@@ -140,8 +162,12 @@ export async function fundWithWallet (wallet: WalletInterface, outputs: PaymentO
   try {
     result = await wallet.createAction(args, extra.originator)
   } catch (e) {
-    throw fundingError(info.path, `The wallet could not build the payment: ${errorText(e)}`, e)
+    const hint = expiry !== undefined
+      ? ` (the payment asks the wallet to reclaim it after ${extra.expirySeconds!} s, BRC-177; a wallet without BRC-177 refuses it)`
+      : ''
+    throw fundingError(info.path, `The wallet could not build the payment: ${errorText(e)}${hint}`, e)
   }
+  const reclaimAt = expiry !== undefined ? Date.now() + extra.expirySeconds! * 1000 : undefined
   const txid = result.txid
   const tx = result.tx
   if (txid === undefined || tx === undefined) throw fundingError(info.path, 'The wallet returned no transaction')
@@ -149,9 +175,11 @@ export async function fundWithWallet (wallet: WalletInterface, outputs: PaymentO
   const abort = async (): Promise<boolean> => {
     if (aborted) return true
     try {
-      await wallet.abortAction({ reference: txid }, extra.originator)
-      aborted = true
-      return true
+      // Wallet Toolbox answers aborted: false when it refused, e.g. for a
+      // payment the network already holds.
+      const r = await wallet.abortAction({ reference: txid }, extra.originator)
+      aborted = (r as { aborted?: boolean } | undefined)?.aborted !== false
+      return aborted
     } catch {
       return false
     }
@@ -159,7 +187,7 @@ export async function fundWithWallet (wallet: WalletInterface, outputs: PaymentO
   const atomic = Uint8Array.from(tx)
   try {
     const { beefV1 } = toBeefV1(atomic, txid)
-    return { txid, beefV1, atomicBeef: atomic, abort }
+    return { txid, beefV1, atomicBeef: atomic, abort, ...(reclaimAt !== undefined ? { reclaimAt } : {}) }
   } catch (e) {
     if (!info.broadcast) await abort()
     throw new PaymentError('beef-unusable', `The wallet's transaction cannot be handed to a SpiffyVault payee: ${errorText(e)}`,
@@ -191,7 +219,7 @@ export async function fundWithFunder (funder: Funder, outputs: PaymentOutput[], 
       { path: info.path, stage: 'pay', canPayAnotherWay: true, aborted: true, cause: e })
   }
   checkPays(converted.beefV1, outputs, info.path, abort)
-  return { txid: converted.txid, beefV1: converted.beefV1, abort }
+  return { txid: converted.txid, beefV1: converted.beefV1, abort, ...(info.reclaimAt !== undefined ? { reclaimAt: info.reclaimAt } : {}) }
 }
 
 /** The payment must pay every requested output (a funder could get it wrong). */

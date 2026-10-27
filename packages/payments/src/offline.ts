@@ -13,6 +13,11 @@
  *    with no RCE2 encryption and no compression.
  *
  * A failure before the mailbox took the message aborts the wallet action.
+ *
+ * A payment the payee never collects is reclaimed after
+ * OFFLINE_RECLAIM_SECONDS, as the app does (offline_payment_service.dart
+ * strandedAfter): a BRC-100 wallet is asked to by the BRC-177 label, and a
+ * Funder is told when in `info.reclaimAt`.
  */
 
 import { NoServerError } from '@go-ricochet/ricochet/core'
@@ -38,6 +43,8 @@ import type { FundingContext, PaymentProgress, PaymentResult } from './types.ts'
 export const OFFLINE_MESSAGE_VERSION = 2
 /** The app's priority for offline payments (offline_payment_service.dart). */
 export const OFFLINE_PAYMENT_PRIORITY = 2
+/** The app's 3 days (offline_payment_service.dart strandedAfter), after which an uncollected payment is reclaimed. */
+export const OFFLINE_RECLAIM_SECONDS = 3 * 24 * 60 * 60
 
 /** lib/models/offline_payment_message.dart. */
 export interface OfflinePaymentMessage {
@@ -118,6 +125,15 @@ export interface OfflinePayContext extends FundingContext {
   identityKey: Ed25519PrivateKeyLike
   /** Sealing options (fixed keys for tests). */
   seal?: SealOptions
+  /**
+   * Reclaim the payment after this many seconds if the payee has not
+   * broadcast it. Default OFFLINE_RECLAIM_SECONDS (3 days, as the app).
+   * With a BRC-100 wallet this needs BRC-177 (Wallet Toolbox 2.14.7 or
+   * later, with its monitor running); a wallet without it refuses the
+   * payment. `false`: no reclaim, and the payment holds its inputs until
+   * the payee broadcasts it or you abort it yourself.
+   */
+  offlineReclaimSeconds?: number | false
 }
 
 /** The 32-byte seed of `key`, checked to be the key of `peerId`. */
@@ -143,6 +159,10 @@ export async function payOffline (params: OfflinePayParams, ctx: OfflinePayConte
   assertNetwork(params.network)
   if (!Number.isSafeInteger(params.amountSats) || params.amountSats <= 0) throw invalid('The amount must be a whole number of satoshis, at least 1')
   if (ctx.wallet === undefined && ctx.funder === undefined) throw new PaymentError('no-route', 'Offline payments need a wallet or a funder', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
+  const reclaimSeconds = ctx.offlineReclaimSeconds === undefined ? OFFLINE_RECLAIM_SECONDS : ctx.offlineReclaimSeconds
+  if (reclaimSeconds !== false && (!Number.isSafeInteger(reclaimSeconds) || reclaimSeconds <= 0)) {
+    throw new TypeError(`offlineReclaimSeconds must be a whole number of seconds above 0, or false: ${String(reclaimSeconds)}`)
+  }
   const { ricochet } = ctx
   const senderPeerId = ricochet.peerId
   const seed = payerSeed(ctx.identityKey, senderPeerId)
@@ -170,8 +190,11 @@ export async function payOffline (params: OfflinePayParams, ctx: OfflinePayConte
   progress('fund', destination.address)
   const info = { path: 'offline' as const, broadcast: false, ...(note !== undefined ? { note } : {}), counterparty: params.payeePeerId }
   const funded: FundedPayment = ctx.wallet !== undefined
-    ? await fundWithWallet(ctx.wallet, outputs, info, ctx.originator !== undefined ? { originator: ctx.originator } : {})
-    : await fundWithFunder(ctx.funder!, outputs, info)
+    ? await fundWithWallet(ctx.wallet, outputs, info, {
+      ...(ctx.originator !== undefined ? { originator: ctx.originator } : {}),
+      ...(reclaimSeconds !== false ? { expirySeconds: reclaimSeconds } : {})
+    })
+    : await fundWithFunder(ctx.funder!, outputs, { ...info, ...(reclaimSeconds !== false ? { reclaimAt: Date.now() + reclaimSeconds * 1000 } : {}) })
 
   const giveUp = async (code: 'mailbox-refused' | 'server-unreachable' | 'prekeys-invalid', message: string, cause?: unknown): Promise<never> => {
     progress('abort', funded.txid)
@@ -222,6 +245,7 @@ export async function payOffline (params: OfflinePayParams, ctx: OfflinePayConte
     ...(note !== undefined ? { note } : {}),
     paymentId,
     messageId: sent.messageId,
+    ...(funded.reclaimAt !== undefined ? { reclaimAt: funded.reclaimAt } : {}),
     attempts: []
   }
 }

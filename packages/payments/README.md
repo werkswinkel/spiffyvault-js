@@ -128,7 +128,7 @@ The result names the path, the txid and the status:
 |---|---|---|
 | `completed` | live | The phone checked the payment by SPV and the network holds it. |
 | `sent` | live | The phone checked it and ARC accepted it, but the network had not answered within `timeouts.networkMs` (default 60 s). Do not pay again; watch the txid. |
-| `handed-off` | offline | The sealed payment is in the payee's mailbox. The phone broadcasts it when it collects it. |
+| `handed-off` | offline | The sealed payment is in the payee's mailbox. The phone broadcasts it when it collects it. Not collected by `result.reclaimAt` (3 days on), it is reclaimed ([below](#an-offline-payment-the-payee-never-collects)). |
 | `delivered` | peerpay | Your wallet broadcast it and the token is in the payee's message box. |
 
 `result.attempts` lists the paths that failed safely before.
@@ -284,6 +284,49 @@ With a BRC-100 wallet (`WalletInterface` from `@bsv/sdk`), the library asks
   token carries the Atomic BEEF, checked for txid-only entries, which
   SpiffyVault refuses.
 
+### An offline payment the payee never collects
+
+A mailbox payment waits until the payee's phone collects and broadcasts it,
+and until then it is a valid payment the payee could still broadcast. The
+app gives the payee 3 days: after that it spends the payment's coins back
+to itself, so the payee's copy can no longer go through.
+
+The library asks your wallet to do the same. An offline payment's
+`createAction` carries the [BRC-177](https://github.com/bsv-blockchain/BRCs/blob/master/wallet/0177.md)
+label `p nosend expiry seconds 259200` (`OFFLINE_RECLAIM_SECONDS`, 3
+days). The wallet then:
+
+1. broadcasts a small transaction that makes one coin for this payment, and
+   pays the payment from that coin alone, so no other coins are held;
+2. signs a reclaim of that coin back to itself, and keeps it;
+3. after the deadline, broadcasts the reclaim, but only when the network
+   has never seen the payment. A payment the payee broadcast in time is
+   left alone.
+
+`result.reclaimAt` says when (ms since 1970). What it needs:
+
+- **A wallet with BRC-177**: Wallet Toolbox 2.14.7 or later. A wallet
+  without it refuses the payment (BRC-111 requires that), and `pay()`
+  fails with `funding-failed` before anything is handed over.
+- **The wallet's monitor running**: the deadline is kept by the
+  toolbox's `Monitor` (its default tasks include the expiry task). A wallet
+  on remote storage has the server's monitor do it.
+- **A little more fee**: the funding transaction is one more transaction
+  per offline payment.
+
+A delivery that fails after the payment was built (the mailbox refused it,
+say) calls `abortAction`. For one of these payments the toolbox broadcasts
+the reclaim at once instead of only releasing the coins.
+
+`offlineReclaimSeconds` sets another deadline. `offlineReclaimSeconds:
+false` leaves the label out: use it for a wallet without BRC-177, and
+reclaim stranded payments yourself. With a `funder`, the library cannot
+reclaim: `info.reclaimAt` tells your funder when to spend the payment's
+inputs back to itself if the payee has not broadcast it.
+
+Live payments and PeerPay carry no label: the live payee broadcasts at
+once, and PeerPay is broadcast by your wallet.
+
 For a wallet that is not BRC-100, pass a `funder` instead (live and
 offline only):
 
@@ -323,6 +366,10 @@ https://shop.spiffyvault.net/pay-from-browser/ needed:
   may have to spend change from one the payee has not broadcast yet. Keep
   each payment's transaction and put it in the next BEEF as an unproven
   parent; the payee broadcasts parents first.
+- **Reclaim what the payee never collects.** At `info.reclaimAt`, if the
+  network has not seen the payment, spend its inputs back to yourself (the
+  app does after 3 days). Freeing the marks alone is not enough: until the
+  inputs are spent again, the payee can still broadcast its copy.
 - **Never forget a payment the payee may still broadcast.** Clearing the
   marks lets the next payment spend the same coins. Whichever transaction
   reaches the network first wins; the other payee's broadcast is refused
@@ -537,7 +584,7 @@ did.
 | The broadcaster | Arcade on testnet, GorillaPool's ARC on mainnet (`DEFAULT_ARC`) | The payee: putting a checked payment on the network, and following it there | Lose a payment, or say the network has seen it when it has not. Only a block proves the network took it | `not-broadcast`; or `unsettled` when it took the payment and then went quiet: watch the txid before handing over goods ([Being paid](#being-paid)) | `broadcaster`, or `arcBroadcaster(network, { url, apiKey })` |
 | BSVA's message box | `https://messagebox.bsvblockchain.tech` (`DEFAULT_MESSAGE_BOX_HOST`), the one the app reads | PeerPay: carrying the payment token to the payee | See who pays whom. Drop the token, so the payee never learns of the payment | Your wallet broadcasts before the token is sent, so a payment can be on the network with its token not delivered: `PeerPayUndeliveredError`. Send the token again with `deliverPeerPayToken()`; do not pay again | `peerPay.host`, but the app reads only BSVA's |
 | The payee's website | The link's `d` | The domain check: `https://<d>/.well-known/spiffyvault.json` | Whoever runs the domain can list any payee. The check proves the domain names the payee, not that the payer meant that domain | `pay()` refuses the link with `DomainError` before anything is asked of the payee | `domainFetch` |
-| Your wallet | The one you pass | Funding, and broadcasting PeerPay payments | Whatever its own services do (the wallet toolbox uses WhatsOnChain and ARC) | No payment can be built | Your choice |
+| Your wallet | The one you pass | Funding, broadcasting PeerPay payments, and reclaiming offline payments the payee never collects | Whatever its own services do (the wallet toolbox uses WhatsOnChain and ARC) | No payment can be built | Your choice |
 
 The mainnet defaults will change before the SDK is used on mainnet: ARC
 is retired on 30 November 2026, and payees move to
@@ -566,9 +613,9 @@ your callback.
 - It builds and sends within the phone's 60 s invoice window; when building
   takes too long it aborts.
 - It does not follow a payment on the network after handing it over (no
-  indexer lookups), and it does not reclaim a stranded offline payment. A
-  payment the payee never collects stays `noSend` in your wallet: after 3
-  days the app would spend its inputs back to itself.
+  indexer lookups). An offline payment the payee never collects is
+  reclaimed by your wallet after 3 days, as the app does, when the wallet
+  has BRC-177 ([above](#an-offline-payment-the-payee-never-collects)).
 
 ## Testing
 
@@ -634,6 +681,18 @@ repository root first).
    Expect `done: handed-off by offline`. The phone imports it from its
    mailbox (at once if the app is open, else within 30 s of opening it) and
    broadcasts it.
+
+   To see a reclaim, pay with the phone's app closed and a short deadline,
+   then run the wallet's monitor past it. The balance comes back less the
+   fees:
+
+   ```sh
+   node tools/e2e-pay.ts pay '<link>' --path offline --reclaim-seconds 300
+   node tools/e2e-pay.ts monitor 15
+   ```
+
+   Open the app only afterwards: it then finds a payment it can no longer
+   broadcast.
 7. PeerPay (the link must have `k`):
 
    ```sh
