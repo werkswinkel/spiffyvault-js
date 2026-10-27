@@ -18,11 +18,15 @@ before you disclose it.
 
 ## Scope
 
-- `@spiffyvault/payments` (this repository).
-- The protocols it shares with the SpiffyVault app: payment links and
+- `@spiffyvault/payments` and `@spiffyvault/sign-in` (this repository).
+  `@spiffyvault/payments/internal` is in scope too, though it is not a
+  stable API.
+- The protocols they share with the SpiffyVault app: payment links and
   domain files, live payments over libp2p, offline payments sealed to a
   Ricochet mailbox, PeerPay, and SpiffyVault sign-in.
 
-The SpiffyVault apps themselves are reported the same way. Testnet only for
-now: the SDK has not had an outside review, so do not use it for mainnet
-funds yet.
+The SpiffyVault apps themselves are reported the same way.
+
+Testnet only for now. The cryptography had an outside review in October
+2026, and the fixes from it are not yet re-checked by the reviewer, so do
+not use the SDK for mainnet funds yet.
