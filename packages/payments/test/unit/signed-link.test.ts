@@ -63,3 +63,11 @@ test('pay() refuses a changed signed link before asking anyone', async () => {
   }), (e: unknown) => e instanceof LinkChangedError && e.code === 'link-changed' && !e.canPayAnotherWay)
   assert.equal(dialled, false)
 })
+
+test('a note with control characters and loose spaces is signed as a payer reads it', async () => {
+  const shop = await identityFromSeed(fill(7))
+  const signed = await signPaymentLink({ network: 'testnet', peerId: shop.peerId, memo: ' Cof\u0085fee\u0001  to go ', walletId: 'till', walletLabel: 'Front\u007f desk' }, shop.libp2pKey)
+  assert.equal(signed.memo, 'Coffee to go')
+  assert.equal(signed.walletLabel, 'Front desk')
+  assert.equal(linkSignatureValid(parsePaymentLink(formatPaymentLink(signed))!), true)
+})

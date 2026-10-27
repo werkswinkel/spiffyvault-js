@@ -380,14 +380,17 @@ export function linkSignatureValid (link: PaymentLink): boolean {
 
 /**
  * The link signed by `signer`, the private key of its peer ID (a libp2p
- * Ed25519 key), as the app signs the links it makes. Throws when the link
- * has no peer ID, or the signature does not check against it.
+ * Ed25519 key), as the app signs the links it makes: its note and wallet
+ * name cleaned as a payer reads them. Throws when the link has no peer ID,
+ * is not valid, or the signature does not check against it.
  */
 export async function signPaymentLink (link: PaymentLink, signer: PeerKeySigner): Promise<PaymentLink> {
   if (link.peerId === undefined) throw new TypeError('Only a link with a peer ID can be signed')
   const { signature: _old, ...rest } = link
-  const unsigned: PaymentLink = { ...rest }
-  if (unsigned.walletId === undefined) delete unsigned.walletLabel
+  if (rest.walletId === undefined) delete rest.walletLabel
+  // Signed as a payer reads it: the note and wallet name cleaned, as the app signs.
+  const unsigned = parsePaymentLink(formatPaymentLink(rest))
+  if (unsigned === null) throw new TypeError('not a valid payment link')
   const signed: PaymentLink = { ...unsigned, signature: b64url(await signer.sign(utf8(linkSignedText(unsigned)))) }
   if (!linkSignatureValid(signed)) throw new Error('The signature does not match the peer ID: sign with its own key')
   return signed
