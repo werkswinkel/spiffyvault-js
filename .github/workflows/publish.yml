@@ -1,0 +1,59 @@
+name: publish
+
+# Stages a package on npm, with provenance, when a tag is pushed:
+#   payments-v<version>   @spiffyvault/payments
+#   sign-in-v<version>    @spiffyvault/sign-in
+# The tag's version must match the package's package.json.
+#
+# Uses npm trusted publishing (OIDC): on npmjs.com, each package's settings
+# name this repository and this workflow file as its trusted publisher, so
+# no npm token is stored here. The workflow can only stage a version; it
+# goes public when a maintainer approves it with 2FA, on npmjs.com or with
+# `npm stage approve <id>`. The first release of each package, 0.1.0, was
+# published by hand: npm lets a workflow publish a package only after the
+# package exists.
+
+on:
+  push:
+    tags:
+      - 'payments-v*'
+      - 'sign-in-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.18'
+          registry-url: https://registry.npmjs.org
+      # npm stage needs a newer npm than trusted publishing alone (11.5.1).
+      - run: npm install -g npm@11.21.1
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Which package, and does the tag match its version
+        id: pkg
+        run: |
+          case "$GITHUB_REF_NAME" in
+            payments-v*) dir=packages/payments; version="${GITHUB_REF_NAME#payments-v}" ;;
+            sign-in-v*) dir=packages/sign-in; version="${GITHUB_REF_NAME#sign-in-v}" ;;
+            *) echo "unknown tag $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+          actual=$(node -p "require('./$dir/package.json').version")
+          if [ "$actual" != "$version" ]; then
+            echo "tag says $version, $dir/package.json says $actual"; exit 1
+          fi
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+      - run: npm run test:unit
+        working-directory: ${{ steps.pkg.outputs.dir }}
+      - run: npm stage publish --provenance --access public
+        working-directory: ${{ steps.pkg.outputs.dir }}
