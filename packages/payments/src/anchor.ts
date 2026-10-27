@@ -7,7 +7,7 @@
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { concat, fromHex, fromUtf8, toHex, u32be, utf8 } from './bytes.ts'
 import { NetworkMismatchError, PaymentError, errorText } from './errors.ts'
-import { PAYMENT_ANCHOR_DOCUMENT, canonicalNetwork, forNetwork, walletNetworkType } from './networks.ts'
+import { PAYMENT_ANCHOR_DOCUMENT, canonicalNetwork, forNetwork, parseNetwork, walletNetworkType } from './networks.ts'
 import type { Network } from './networks.ts'
 import { refInNote } from './link.ts'
 import { ed25519KeyOfPeerId } from './peer.ts'
@@ -182,8 +182,14 @@ export async function fetchAnchor (ricochet: RicochetLike, payeePeerId: string, 
         { path: 'offline', stage: 'request', canPayAnotherWay: true, cause: e })
       continue
     }
-    if ((canonicalNetwork(record.networkType) === 'mainnet') !== (network === 'mainnet')) {
-      throw new NetworkMismatchError(canonicalNetwork(record.networkType), network, 'anchor', 'offline')
+    const theirs = parseNetwork(record.networkType)
+    if (theirs === null) {
+      refused = new PaymentError('anchor-invalid', `The payee's anchor record names no network we know: ${JSON.stringify(record.networkType)}`,
+        { path: 'offline', stage: 'request', canPayAnotherWay: true })
+      continue
+    }
+    if ((theirs === 'mainnet') !== (network === 'mainnet')) {
+      throw new NetworkMismatchError(theirs, network, 'anchor', 'offline')
     }
     const problem = verifyAnchorRecord(record, payeePeerId, walletNetworkType(network), path)
     if (problem === null) return { record, path }

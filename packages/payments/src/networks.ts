@@ -9,25 +9,40 @@ export type Network = 'mainnet' | 'testnet' | 'regtest'
 /** libspiffy's spelling: anchor `networkType`, invoice `network`. */
 export type WalletNetworkType = 'main' | 'test' | 'regtest'
 
-/** Any spelling to the link's: mainnet, regtest, else testnet (NetworkName.canonical). */
-export function canonicalNetwork (network: string | null | undefined): Network {
-  const n = network?.trim().toLowerCase()
-  if (n === 'main' || n === 'mainnet' || n === 'livenet') return 'mainnet'
-  if (n === 'regtest') return 'regtest'
-  return 'testnet'
+/**
+ * A network's documented spellings to the link's: `mainnet`, `main` or
+ * `livenet`; `testnet` or `test`; `regtest`, in any case and with spaces
+ * around them. Throws a TypeError on any other, so that a typo is never
+ * read as testnet (assessment finding 9). For a value you did not write
+ * yourself, use parseNetwork.
+ */
+export function canonicalNetwork (network: string): Network {
+  const n = parseNetwork(network)
+  if (n === null) throw new TypeError(`Not a network: ${JSON.stringify(network)} (mainnet, testnet or regtest)`)
+  return n
 }
 
 /**
- * A network name in a domain file, as the app reads it: null for any other
- * spelling, so that a typo is not a testnet entry (assessment finding 9).
+ * As canonicalNetwork, but null for a spelling that is not a network: for
+ * values from files, records and wallets. A domain file reads its names so,
+ * as the app does.
  */
-export function fileNetwork (value: string): Network | null {
+export function parseNetwork (value: string | null | undefined): Network | null {
+  if (typeof value !== 'string') return null
   switch (value.trim().toLowerCase()) {
     case 'mainnet': case 'main': case 'livenet': return 'mainnet'
     case 'testnet': case 'test': return 'testnet'
     case 'regtest': return 'regtest'
     default: return null
   }
+}
+
+/** `network` when it is exactly 'mainnet', 'testnet' or 'regtest'; a TypeError otherwise, for plain JavaScript callers. */
+export function assertNetwork (network: Network): Network {
+  if (network !== 'mainnet' && network !== 'testnet' && network !== 'regtest') {
+    throw new TypeError(`Not a network: ${JSON.stringify(network)} (mainnet, testnet or regtest)`)
+  }
+  return network
 }
 
 /** The link's `n` values the app reads; null for anything else. */

@@ -23,7 +23,7 @@ import { p2pkhScriptForAddress } from '../destination.ts'
 import { NetworkMismatchError, PaymentError, errorText } from '../errors.ts'
 import { fundWithFunder, fundWithWallet } from '../funding.ts'
 import type { FundedPayment, PaymentOutput } from '../funding.ts'
-import { SPIFFYVAULT_RICOCHET, canonicalNetwork, walletNetworkType } from '../networks.ts'
+import { SPIFFYVAULT_RICOCHET, assertNetwork, parseNetwork, walletNetworkType } from '../networks.ts'
 import type { Network } from '../networks.ts'
 import type { FundingContext, PaymentProgress, PaymentResult } from '../types.ts'
 import { encodeOnFrame, openFrameReader, readOnFrame } from './frame.ts'
@@ -151,7 +151,9 @@ export function checkInvoice (msg: Record<string, unknown>, amountSats: number, 
   try { amount = BigInt(String(msg.amount)) } catch { amount = undefined }
   if (amount !== BigInt(amountSats)) throw bad(`it is for ${String(msg.amount)} sats, not the ${amountSats} sats of this payment`)
   if (msg.network !== undefined && msg.network !== null && msg.network !== walletNetworkType(network)) {
-    throw new NetworkMismatchError(canonicalNetwork(String(msg.network)), network, 'invoice', 'live')
+    const theirs = parseNetwork(typeof msg.network === 'string' ? msg.network : undefined)
+    if (theirs === null) throw bad(`it names no network we know: ${JSON.stringify(msg.network)}`)
+    throw new NetworkMismatchError(theirs, network, 'invoice', 'live')
   }
   for (const a of addresses) {
     try { p2pkhScriptForAddress(a, network) } catch (e) { throw bad(errorText(e)) }
@@ -191,6 +193,7 @@ export function invoiceOutputs (inv: Invoice, amountSats: number, network: Netwo
 /** Pays the payee over a libp2p stream; the payee checks it by SPV and broadcasts it. */
 export async function payLive (params: LivePayParams, ctx: LivePayContext): Promise<PaymentResult> {
   const progress = (step: PaymentProgress['step'], detail?: string): void => ctx.onProgress?.({ path: 'live', step, ...(detail !== undefined ? { detail } : {}) })
+  assertNetwork(params.network)
   if (!Number.isSafeInteger(params.amountSats) || params.amountSats <= 0) {
     throw err('amount-invalid', 'The amount must be a whole number of satoshis, at least 1', 'prepare', true)
   }

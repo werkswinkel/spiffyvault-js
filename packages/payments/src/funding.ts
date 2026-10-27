@@ -111,7 +111,8 @@ export function checkAtomicBeefForPeerPay (bytes: Uint8Array | readonly number[]
 /** Network of a BRC-100 wallet, in the link's spelling. */
 export async function walletNetwork (wallet: WalletInterface): Promise<'mainnet' | 'testnet'> {
   const { network } = await wallet.getNetwork({})
-  return network === 'mainnet' ? 'mainnet' : 'testnet'
+  if (network === 'mainnet' || network === 'testnet') return network
+  throw new TypeError(`The wallet names no network we know: ${JSON.stringify(network)}`)
 }
 
 function fundingError (path: PaymentPath, message: string, cause?: unknown): PaymentError {

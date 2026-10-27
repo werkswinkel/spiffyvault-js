@@ -181,6 +181,21 @@ The check reads over HTTPS, follows no redirect, waits 5 s and reads at most
 file; without it the answer is `unreachable`, as is a missing file served
 without that header. Either way the link is refused.
 
+Whoever makes a link chooses its domain, so the check never reaches a
+private network, as the app's does not:
+
+- A domain at or under `localhost`, `local`, `internal`, `home.arpa`, `lan`,
+  `home`, `corp` or `intranet` (`PRIVATE_DOMAIN_SUFFIXES`) is `unreachable`,
+  and nothing is fetched.
+- From `@spiffyvault/payments/node`, the file is read with `nodeDomainFetch`:
+  the name is looked up once, refused when any of its addresses is
+  loopback, private, link-local, shared or unique-local
+  (`isPrivateAddress`), and the connection goes to the address looked up.
+  Pass your own `fetch` (or `domainFetch` to `pay()`) only if it does the
+  same.
+- A browser cannot look names up, so there only the names are refused; the
+  browser's own rules, and the HTTPS and CORS the file needs, do the rest.
+
 The SpiffyVault app writes the file for its user (Identity, Your website).
 A shop's server can write it with the payee's libp2p Ed25519 key; the entry
 is byte for byte the app's for the same key:

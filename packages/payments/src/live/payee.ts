@@ -23,7 +23,7 @@ import { p2pkhScriptForAddress } from '../destination.ts'
 import { errorText } from '../errors.ts'
 import { beefKind } from '../funding.ts'
 import { MAX_AMOUNT_SATS } from '../link.ts'
-import { walletNetworkType } from '../networks.ts'
+import { assertNetwork, walletNetworkType } from '../networks.ts'
 import type { Network } from '../networks.ts'
 import { encodeOnFrame, readOnFrame } from './frame.ts'
 import { PAYMENT_PROTOCOL } from './live.ts'
@@ -194,6 +194,7 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
   // By payer and session ID: by the ID alone, another peer that sent a
   // request with a payer's session ID replaced that payer's session, and the
   // payer's payment was then refused.
+  assertNetwork(options.network)
   const sessions = new Map<string, Session>()
   const sessionKey = (payerPeerId: string, sessionId: string): string => `${payerPeerId} ${sessionId}`
   const sessionMs = options.sessionMs ?? PAYEE_SESSION_MS

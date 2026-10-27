@@ -21,7 +21,7 @@
 
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { INVISIBLE_FORMAT, fromHex, runeLength, takeRunes, toHex, utf8 } from './bytes.ts'
-import { canonicalNetwork, fileNetwork } from './networks.ts'
+import { canonicalNetwork, parseNetwork } from './networks.ts'
 import type { Network } from './networks.ts'
 import { ed25519KeyOfPeerId } from './peer.ts'
 
@@ -94,7 +94,7 @@ export async function domainEntry (params: DomainEntryParams, signer: PeerKeySig
   const domain = normalizeDomain(params.domain)
   if (domain === null) throw new TypeError(`not a domain: ${params.domain}`)
   const networks = params.networks.map(n => {
-    const net = fileNetwork(n)
+    const net = parseNetwork(n)
     if (net === null) throw new TypeError(`not a network: ${n}`)
     return net
   })
@@ -148,12 +148,92 @@ export interface DomainCheckParams {
   paymentKey?: string
   /** The payer's network. */
   network: string
-  /** Default: fetch() over HTTPS, no redirects, 5 s, at most 16 KiB. */
+  /**
+   * Default: fetch() over HTTPS, no redirects, 5 s in all, at most 16 KiB;
+   * from the Node.js entry, one that also connects only to a public address
+   * (nodeDomainFetch). A domain at or under PRIVATE_DOMAIN_SUFFIXES is
+   * refused as 'unreachable' before any fetch.
+   */
   fetch?: DomainFetch
   signal?: AbortSignal
 }
 
-class TooLarge extends Error {}
+/** A domain file longer than MAX_DOMAIN_FILE_BYTES: thrown by a DomainFetch, read as 'bad-file'. */
+export class DomainFileTooLarge extends Error {}
+
+/**
+ * Names that are never on the public internet, as the app keeps them:
+ * a link's domain at or under one is refused before anything is fetched,
+ * so that a link cannot make a payer or a shop's server reach its own
+ * network (assessment finding 6).
+ */
+export const PRIVATE_DOMAIN_SUFFIXES: readonly string[] = ['localhost', 'local', 'internal', 'home.arpa', 'lan', 'home', 'corp', 'intranet']
+
+/** Whether `domain` (normalized) is, or is under, one of PRIVATE_DOMAIN_SUFFIXES. */
+export function isPrivateDomainName (domain: string): boolean {
+  return PRIVATE_DOMAIN_SUFFIXES.some(s => domain === s || domain.endsWith(`.${s}`))
+}
+
+/**
+ * Whether the IP address `address` (text) is not on the public internet:
+ * unspecified, loopback, private, shared (CGNAT), link-local or unique-local,
+ * or an IPv4 one of those written as IPv6. Text that is not an address
+ * counts as private. The app's PayeeDomain.isPrivateAddress.
+ */
+export function isPrivateAddress (address: string): boolean {
+  const v4 = (a: string): number[] | null => {
+    const parts = a.split('.')
+    if (parts.length !== 4 || !parts.every(p => /^\d{1,3}$/.test(p) && Number(p) <= 255)) return null
+    return parts.map(Number)
+  }
+  const privateV4 = (b: number[]): boolean =>
+    b[0] === 0 || b[0] === 10 || b[0] === 127 ||
+    (b[0] === 100 && (b[1]! & 0xc0) === 64) ||
+    (b[0] === 169 && b[1] === 254) ||
+    (b[0] === 172 && (b[1]! & 0xf0) === 16) ||
+    (b[0] === 192 && b[1] === 168)
+  const plain = v4(address)
+  if (plain !== null) return privateV4(plain)
+  const bytes = v6Bytes(address)
+  if (bytes === null) return true
+  const mapped = bytes.slice(0, 10).every(x => x === 0) && bytes[10] === 0xff && bytes[11] === 0xff
+  if (mapped) return privateV4(bytes.slice(12))
+  const zeroHead = bytes.slice(0, 15).every(x => x === 0)
+  return (zeroHead && (bytes[15] === 0 || bytes[15] === 1)) || (bytes[0]! & 0xfe) === 0xfc || (bytes[0] === 0xfe && (bytes[1]! & 0xc0) === 0x80)
+}
+
+/** An IPv6 address's 16 bytes, its zone dropped; null when it is not one. */
+function v6Bytes (text: string): number[] | null {
+  let a = text.replace(/^\[|\]$/g, '').split('%')[0]!.toLowerCase()
+  const tail: number[] = []
+  const dotted = /^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(a)
+  if (dotted !== null) {
+    const parts = dotted[2]!.split('.').map(Number)
+    if (parts.some(p => p > 255)) return null
+    tail.push(parts[0]! << 8 | parts[1]!, parts[2]! << 8 | parts[3]!)
+    a = dotted[1]!.endsWith('::') ? dotted[1]! : dotted[1]!.slice(0, -1)
+  }
+  const halves = a.split('::')
+  if (halves.length > 2) return null
+  const group = (s: string): number[] | null => {
+    if (s === '') return []
+    const g = s.split(':')
+    if (!g.every(x => /^[0-9a-f]{1,4}$/.test(x))) return null
+    return g.map(x => parseInt(x, 16))
+  }
+  const head = group(halves[0]!)
+  const rest = halves.length === 2 ? group(halves[1]!) : []
+  if (head === null || rest === null) return null
+  const known = head.length + rest.length + tail.length
+  if (halves.length === 1 ? known !== 8 : known > 7) return null
+  const words = [...head, ...new Array<number>(8 - known).fill(0), ...rest, ...tail]
+  return words.flatMap(w => [w >> 8, w & 0xff])
+}
+
+let defaultDomainFetch: DomainFetch = (url, signal) => fetchDomainFile(url, signal)
+
+/** The fetch checkPayeeDomain uses when given none: the Node.js entry sets one that refuses private addresses. */
+export function setDefaultDomainFetch (fetch: DomainFetch): void { defaultDomainFetch = fetch }
 
 /**
  * Checks that `domain` lists the payee for `network`, as the app does
@@ -163,13 +243,15 @@ class TooLarge extends Error {}
 export async function checkPayeeDomain (params: DomainCheckParams): Promise<DomainCheck> {
   const domain = normalizeDomain(params.domain)
   if (domain === null) return { verified: false, domain: params.domain, problem: 'bad-file' }
+  if (isPrivateDomainName(domain)) return { verified: false, domain, problem: 'unreachable' }
+  canonicalNetwork(params.network)
   const timeout = AbortSignal.timeout(DOMAIN_TIMEOUT_MS)
   const signal = params.signal !== undefined ? AbortSignal.any([params.signal, timeout]) : timeout
   let body: Uint8Array | null
   try {
-    body = await (params.fetch ?? fetchDomainFile)(domainFileUrl(domain), signal)
+    body = await (params.fetch ?? defaultDomainFetch)(domainFileUrl(domain), signal)
   } catch (e) {
-    if (e instanceof TooLarge) return { verified: false, domain, problem: 'bad-file' }
+    if (e instanceof DomainFileTooLarge) return { verified: false, domain, problem: 'bad-file' }
     return { verified: false, domain, problem: 'unreachable' }
   }
   if (body === null) return { verified: false, domain, problem: 'no-file' }
@@ -216,7 +298,7 @@ export function verifyDomainFile (body: Uint8Array | string, params: Omit<Domain
       problem = 'bad-file'
       continue
     }
-    const read = (nets as string[]).map(fileNetwork)
+    const read = (nets as string[]).map(parseNetwork)
     if (read.includes(null)) {
       problem = 'bad-file'
       continue
@@ -277,7 +359,7 @@ async function fetchDomainFile (url: string, signal: AbortSignal): Promise<Uint8
     length += value.length
     if (length > MAX_DOMAIN_FILE_BYTES) {
       await reader.cancel()
-      throw new TooLarge()
+      throw new DomainFileTooLarge()
     }
     chunks.push(value)
   }

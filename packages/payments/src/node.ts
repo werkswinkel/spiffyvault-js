@@ -19,9 +19,15 @@ import { multiaddr } from '@multiformats/multiaddr'
 import type { Libp2p, PrivateKey } from '@libp2p/interface'
 import { resolveDnsAddrs } from '@go-ricochet/ricochet/node'
 import { SPIFFYVAULT_RICOCHET } from './networks.ts'
+import { setDefaultDomainFetch } from './domain.ts'
+import { nodeDomainFetch } from './node-domain.ts'
 
 export { resolveDnsAddrs }
 export * from './core.ts'
+export { nodeDomainFetch, PrivateHostError } from './node-domain.ts'
+
+// On a server the domain check connects only to public addresses.
+setDefaultDomainFetch(nodeDomainFetch)
 
 export interface PaymentNodeOptions {
   /** The node's identity (the payer's peer ID); a new Ed25519 key when left out. */

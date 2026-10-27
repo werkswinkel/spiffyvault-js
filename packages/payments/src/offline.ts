@@ -24,7 +24,7 @@ import type { Type42Derivation } from './destination.ts'
 import { PaymentError, errorText } from './errors.ts'
 import { fundWithFunder, fundWithWallet } from './funding.ts'
 import type { FundedPayment, PaymentOutput } from './funding.ts'
-import { OFFLINE_PAYMENTS_FOLDER, forNetwork } from './networks.ts'
+import { OFFLINE_PAYMENTS_FOLDER, assertNetwork, forNetwork } from './networks.ts'
 import type { Network } from './networks.ts'
 import { ed25519KeyOfPeerId } from './peer.ts'
 import type { RicochetLike } from './ricochet.ts'
@@ -140,6 +140,7 @@ function invalid (message: string): PaymentError {
 /** Pays `amountSats` into the payee's Ricochet mailbox. */
 export async function payOffline (params: OfflinePayParams, ctx: OfflinePayContext): Promise<PaymentResult> {
   const progress = (step: PaymentProgress['step'], detail?: string): void => ctx.onProgress?.({ path: 'offline', step, ...(detail !== undefined ? { detail } : {}) })
+  assertNetwork(params.network)
   if (!Number.isSafeInteger(params.amountSats) || params.amountSats <= 0) throw invalid('The amount must be a whole number of satoshis, at least 1')
   if (ctx.wallet === undefined && ctx.funder === undefined) throw new PaymentError('no-route', 'Offline payments need a wallet or a funder', { path: 'offline', stage: 'prepare', canPayAnotherWay: true })
   const { ricochet } = ctx

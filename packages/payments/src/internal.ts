@@ -7,6 +7,7 @@
 
 import '@go-ricochet/libp2p-udx/multiaddr'
 
+export { setDefaultDomainFetch } from './domain.ts'
 export { walletNetworkType, forNetwork, p2pkhVersion, OFFLINE_PAYMENTS_FOLDER, PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER, PAYMENT_ANCHOR_DOCUMENT } from './networks.ts'
 
 export {

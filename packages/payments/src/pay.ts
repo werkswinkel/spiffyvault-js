@@ -25,7 +25,7 @@
 import type { Ed25519PrivateKeyLike } from '@go-ricochet/ricochet/core'
 import { checkPayeeDomain } from './domain.ts'
 import type { DomainFetch } from './domain.ts'
-import { DomainError, LinkChangedError, LinkError, PaymentError, isPaymentError } from './errors.ts'
+import { DomainError, LinkChangedError, LinkError, PaymentError, errorText, isPaymentError } from './errors.ts'
 import type { PaymentPath } from './errors.ts'
 import { walletNetwork } from './funding.ts'
 import {
@@ -34,7 +34,7 @@ import {
 import type { PaymentLink } from './link.ts'
 import { payLive } from './live/live.ts'
 import type { LivePayContext } from './live/live.ts'
-import { canonicalNetwork } from './networks.ts'
+import { canonicalNetwork, parseNetwork } from './networks.ts'
 import type { Network } from './networks.ts'
 import { payOffline } from './offline.ts'
 import { payViaPeerPay } from './peerpay.ts'
@@ -121,7 +121,12 @@ export async function planPayment (req: PayRequest, ctx: Pick<PayContext, 'netwo
     if (link === undefined) throw new LinkError('That is not a valid SpiffyVault payment link')
     if (link.signature !== undefined && !linkSignatureValid(link)) throw new LinkChangedError()
   }
-  const ours = ctx.network ?? (ctx.wallet !== undefined ? await walletNetwork(ctx.wallet) : undefined)
+  let ours: Network | undefined
+  try {
+    ours = ctx.network !== undefined ? canonicalNetwork(ctx.network) : ctx.wallet !== undefined ? await walletNetwork(ctx.wallet) : undefined
+  } catch (e) {
+    throw prepare('no-route', `The payer's network is not known: ${errorText(e)}`)
+  }
   if (ours === undefined) throw prepare('no-route', 'The payer network is not known: pass `network` or a BRC-100 wallet')
 
   let network: Network
@@ -133,8 +138,10 @@ export async function planPayment (req: PayRequest, ctx: Pick<PayContext, 'netwo
     network = link.network
   } else {
     if (req.network === undefined) throw prepare('no-route', 'Without a link, give the payee\'s network')
-    network = canonicalNetwork(req.network)
-    if (network !== canonicalNetwork(ours)) throw linkMismatch({ network }, ours)!
+    const theirs = parseNetwork(req.network)
+    if (theirs === null) throw prepare('no-route', `Not a network: ${JSON.stringify(req.network)} (mainnet, testnet or regtest)`)
+    network = theirs
+    if (network !== ours) throw linkMismatch({ network }, ours)!
     peerId = req.peerId
     if (peerId !== undefined && !isPeerId(peerId)) throw prepare('bad-key', 'That is not a libp2p peer ID')
     if (req.paymentKey !== undefined) {

@@ -6,5 +6,5 @@
     "types": []
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/node.ts"]
+  "exclude": ["src/node.ts", "src/node-domain.ts"]
 }
