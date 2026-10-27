@@ -397,6 +397,14 @@ Staying payable:
   relay again when it is false; a new reservation follows. A closed page
   cannot be paid live: put the payee's BRC-100 key (`k`) in the link too,
   and the app can offer to pay it by PeerPay instead.
+- **On the same device, link to PeerPay.** A button that opens SpiffyVault
+  on the device the page is on sends the page to the background, where a
+  live payment cannot reach it. Give that button a link with only the
+  BRC-100 key, `formatPaymentLink({ network, paymentKey, amountSats })`,
+  and the app pays by PeerPay straight away. That link carries no
+  signature, since a signature needs the peer ID. Keep the signed live
+  link for the QR code, which is scanned from another device, and check the
+  message box when the page is visible again.
 - **Sign the link** with the node's key (`signPaymentLink`), so a changed
   link is refused.
 
