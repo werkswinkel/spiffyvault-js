@@ -23,6 +23,10 @@ Version 0.1.0 is not on npm. Node.js 22.18 or later. ESM only.
 | `@spiffyvault/payments/browser` | Browsers | `createPaymentNode()`: WebSockets and the circuit relay transport |
 | `@spiffyvault/payments/node` | Node.js, Electron main | `createPaymentNode()`: UDX, WebSockets and the circuit relay transport; `resolveDnsAddrs()` |
 | `@spiffyvault/payments` (core) | Any, with your own libp2p node | Nothing platform-specific |
+| `@spiffyvault/payments/internal` | Tests, tools, wallets that need one step on its own | The parts the rest is built from: peer-session bundles and sealing, payment frames, anchor records, BEEF handling, bytes. **Unstable**: any of it may change in any release, a patch release too |
+
+Only the first three are the public API; a release keeps them working or
+says what changed.
 
 The package uses `@go-ricochet/ricochet` for the Ricochet server (offline
 path), `@bsv/sdk` for transactions and keys, and
@@ -198,8 +202,10 @@ ID that is not signed is still paid, but `pay()` never falls back from the
 peer ID to its payment key, since only the signature ties the key to the
 peer ID.
 
-A shop that sets its own amount drops `s` and adds `a` and `m` to the
-payee's fields. A server that holds the payee's key can sign instead:
+A shop that sets its own amounts signs each link on its server with the
+payee's key, so that a changed amount or payee is refused. A link written
+by hand, with `s` left out, has no such check: give it at least `d`, so a
+changed payee is refused.
 
 <!-- example: examples/parts.ts#signed-imports -->
 ```ts
@@ -358,7 +364,7 @@ happens.
 
 <!-- example: examples/payee.ts#payee-imports -->
 ```ts
-import { acceptLivePayments, createPaymentNode, formatPaymentLink, waitUntilReachable } from '@spiffyvault/payments/node'
+import { acceptLivePayments, createPaymentNode, formatPaymentLink, signPaymentLink, waitUntilReachable } from '@spiffyvault/payments/node'
 import type { LivePayeeOptions, ReceivedLivePayment } from '@spiffyvault/payments/node'
 ```
 <!-- /example -->
@@ -366,17 +372,17 @@ import type { LivePayeeOptions, ReceivedLivePayment } from '@spiffyvault/payment
 <!-- example: examples/payee.ts#payee -->
 ```ts
 // A reservation on the relay, and identify push, so the app finds this peer ID.
-const { node } = await createPaymentNode({ payee: true, ...(relay !== undefined ? { relay } : {}) })
+const { node, privateKey } = await createPaymentNode({ payee: true, ...(relay !== undefined ? { relay } : {}) })
 await waitUntilReachable(node)
 const payee = await acceptLivePayments(node, {
   network: 'testnet',
   invoiceAddress: r => addressFor(r.invoiceId), // a new address per invoice, one you can spend
-  onPayment: p => { keep(p) }, // checked by SPV and on the network: keep p.beefV1 and p.vouts
-  onEvent: e => { console.log(`payee: ${e.kind}`) },
+  onPayment: p => { keep(p) }, // checked by SPV and seen on the network: keep p.beefV1 and p.vouts, once per txid
+  onEvent: e => { console.log(`payee: ${e.kind}`) }, // 'keep-failed' and 'unsettled' carry a payment to keep or watch
   ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and ARC
 })
-// The app pays this link live; signPaymentLink() adds a signature.
-const link = formatPaymentLink({ network: 'testnet', peerId: node.peerId.toString(), amountSats: 2500 })
+// The app pays this link live, and refuses it if anyone changes it.
+const link = formatPaymentLink(await signPaymentLink({ network: 'testnet', peerId: node.peerId.toString(), amountSats: 2500 }, privateKey))
 ```
 <!-- /example -->
 
@@ -432,14 +438,33 @@ What `acceptLivePayments` does, as the app's payee does:
   It reads the BEEF V1, checks that the outputs to the invoice's address pay
   at least the amount, and checks the transaction by SPV (`chainTracker`).
 - Broadcasts the unproven ancestors, then the payment (`broadcaster`,
-  default `arcBroadcaster`: ARC, following a `RECEIVED` answer for a few
-  seconds).
-- Calls `onPayment`, then tells the payer it is done. When `onPayment`
-  throws, the payer still hears success: the payment is on the network.
-  Keep the coin (`beefV1`, `vouts`, the invoice's key) before returning.
+  default `arcBroadcaster`: ARC).
+- When the network already has the payment (`SEEN_ON_NETWORK` or
+  better), calls `onPayment`, then tells the payer it is done.
+- When ARC took the payment but the network has not shown it yet
+  (`RECEIVED`, for one), tells the payer so at once (`final: false`, event
+  `on-the-way`), then waits for the network, as the app's payee does.
+  `arcBroadcaster` asks ARC every second for up to 30 s (`followMs`). Once
+  the network has the payment, `onPayment` runs and the payer is told on
+  the same stream (`payment_network`). Nothing is received before then.
+  If the network refuses it, nothing is kept (`not-broadcast`) and the
+  payer hears `network-refused`. If there is still no answer after
+  `networkWaitMs` (default 4 minutes), the event is `unsettled`:
+  `onPayment` has not run, the payer sees the payment as sent, and you
+  watch `payment.txid` yourself.
+- When `onPayment` throws, the payer still hears success: the payment is
+  on the network. The event `keep-failed` carries the whole payment, so
+  you can keep it another way. Make `onPayment` durable (keep the coin:
+  `beefV1`, `vouts` and the invoice's key, before it returns) and safe to
+  call twice for one txid.
 - A payment that does not check out is refused (`payee-refused` for the
-  payer); one the network refuses is reported as not broadcast
+  payer); one the network refuses at once is reported as not broadcast
   (`not-confirmed`). Nothing is kept for either.
+
+When to hand over the goods: `onPayment` means the payment was checked by
+SPV and is seen on the network. For goods of lower value, that is enough.
+For goods of higher value, wait for a confirmation: watch `payment.txid`
+until it is in a block (for example on WhatsOnChain), then hand them over.
 
 ### Receiving PeerPay without a BRC-100 wallet
 
@@ -472,7 +497,7 @@ app that is to be paid by PeerPay needs the key too.
 |---|---|---|
 | The app says a live payee is not online, though the payee shows it is reachable | The server's DHT has no relay address for the payee: its node has no identify push, so the address made after the reservation never reached the server | Use `createPaymentNode`, or add `identifyPush` from `@libp2p/identify` to your own node |
 | Your own DHT lookup of a fresh payee answers "Not found" | The push follows the reservation by a second or two | Retry for a few seconds |
-| Dialling `<relay udx address>/p2p-circuit/p2p/<payee>` fails with "no valid addresses" | js-libp2p's circuit transport does not know `/udx` | Dial the relay, then `/p2p/<relay>/p2p-circuit/p2p/<payee>` (`dialPayee` does this) |
+| Dialling `<relay udx address>/p2p-circuit/p2p/<payee>` fails with "no valid addresses" | js-libp2p's circuit transport does not know `/udx` | Dial the relay, then `/p2p/<relay>/p2p-circuit/p2p/<payee>` (`payLive` does this) |
 | A wallet you just funded says WhatsOnChain has no transaction | Indexer lag (see [Funding](#funding)) | Retry for some seconds |
 | A mailbox payment is collected but never reaches the network | Its coins were spent again before the payee broadcast it (see [Funding](#funding)) | Hold inputs until `abort()`; one payment at a time |
 | The app will not pay a link with only `k`: no BRC-100 identity found | The paying app has no BRC-100 payment key | Set it up in the app ([Receiving PeerPay](#receiving-peerpay-without-a-brc-100-wallet)) |

@@ -18,7 +18,8 @@ import {
   ANCHOR_RECORD_LIFETIME_MS, ANCHOR_RECORD_VERSION, PEER_BUNDLE_FOLDER, PEER_ONE_TIME_KEYS_FOLDER, anchorContextHex, anchorSignaturePayload, concat, encodeBundle, encodeOneTimeKeyItem,
   equalBytes, forNetwork, oneTimeKeySignedBytes, readU32be, signedPreKeySignedBytes, toHex, utf8
 } from './internals.ts'
-import type { AnchorRecord, Network, PreKeyBundle, RicochetLike } from '../../src/index.ts'
+import type { Network, RicochetLike } from '../../src/index.ts'
+import type { AnchorRecord, PreKeyBundle } from '../../src/internal.ts'
 import { decodeKey, dh, edPublicToX25519, encodeKey, identityOfSeed, kdfCk, kdfRk, kdfX3dh, messageKeys, x25519Public } from '../../src/sessions/keys.ts'
 import { ed25519KeyOfPeerId } from '../../src/peer.ts'
 

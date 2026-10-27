@@ -250,6 +250,8 @@ function dartInt (text: string): number | null {
 export function parsePaymentLink (text: string): PaymentLink | null {
   const u = splitUri(dartTrim(text))
   if (u === null || !isLinkShape(u)) return null
+  // Broken, not paid: an http:// link could be changed on its way.
+  if (u.scheme === 'http') return null
   const q = splitQuery(u.query)
   if (q === null) return null
 

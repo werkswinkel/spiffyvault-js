@@ -1,9 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PrivateKey } from '@bsv/sdk'
-import {
-  FrameError, PaymentError, checkInvoice, circuitAddress, decodeOnFrame, encodeOnFrame, invoiceOutputs, newSessionId, readOnFrame, toHex
-} from '../../src/index.ts'
+import { PaymentError } from '../../src/index.ts'
+import { FrameError, checkInvoice, circuitAddress, decodeOnFrame, encodeOnFrame, invoiceOutputs, newSessionId, readOnFrame, toHex } from '../../src/internal.ts'
 import { C } from '../fixtures/appendix-c.ts'
 
 const addr = (): string => PrivateKey.fromRandom().toPublicKey().toAddress('testnet')

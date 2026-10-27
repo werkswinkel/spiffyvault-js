@@ -10,7 +10,7 @@ import { P2PKH, PrivateKey, PublicKey, Transaction } from '@bsv/sdk'
 import type { PayeeIdentity, PayeeSessionKeys } from './payee.ts'
 import { openPreKeyMessage } from './payee.ts'
 import { fromHex, fromUtf8, inspectBeefV1, parseOfflineMessage } from './internals.ts'
-import type { OfflinePaymentMessage } from '../../src/index.ts'
+import type { OfflinePaymentMessage } from '../../src/internal.ts'
 
 export interface Collected {
   message: OfflinePaymentMessage

@@ -6,7 +6,8 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PaymentError, anchorRecordJson, fetchAnchor } from '../../src/index.ts'
+import { PaymentError } from '../../src/index.ts'
+import { anchorRecordJson, fetchAnchor } from '../../src/internal.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { anchorKey, fill, identityFromSeed, signAnchorRecord } from '../support/payee.ts'
 

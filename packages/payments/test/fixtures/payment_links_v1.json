@@ -78,6 +78,14 @@
     {
       "name": "a peer ID that is not Ed25519",
       "link": "https://spiffyvault.net/pay?n=testnet&p=16Uiu2HAm3cuhhRL2msUuLF62KRSfneFDx94RsuouyW25Ho42cFMq"
+    },
+    {
+      "name": "http, not https",
+      "link": "http://spiffyvault.net/pay?n=testnet&p=12D3KooWB8qZaSUhyN7xY9fEafpCfrpPsknzGzsLrKgHbcjrpCgT&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798&a=2500&m=Coffee"
+    },
+    {
+      "name": "http, on www, in capitals",
+      "link": "HTTP://www.spiffyvault.net/pay?n=testnet&k=0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
     }
   ]
 }

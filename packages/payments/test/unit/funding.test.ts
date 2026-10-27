@@ -2,9 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { BEEF_V2, Beef, Transaction } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
-import {
-  PaymentError, type PaymentOutput, beefKind, fundWithFunder, fundWithWallet, inspectBeefV1, p2pkhScriptForAddress, toBeefV1, toHex
-} from '../../src/index.ts'
+import { PaymentError, type PaymentOutput } from '../../src/index.ts'
+import { beefKind, fundWithFunder, fundWithWallet, inspectBeefV1, p2pkhScriptForAddress, toBeefV1, toHex } from '../../src/internal.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 
 const asWallet = (w: FakeWallet): WalletInterface => w as unknown as WalletInterface

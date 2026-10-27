@@ -34,10 +34,8 @@ import type { WalletInterface } from '@bsv/sdk'
 import { Setup } from '@bsv/wallet-toolbox'
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys'
 import { RicochetClient } from '@go-ricochet/ricochet/node'
-import {
-  SPIFFYVAULT_RICOCHET, createPaymentNode, dialPayee, fetchAnchor, fetchBundle, isPaymentError, pay, payLive, payOffline,
-  payViaPeerPay, planPayment, resolveDnsAddrs
-} from '../src/node.ts'
+import { SPIFFYVAULT_RICOCHET, createPaymentNode, isPaymentError, pay, payLive, payOffline, payViaPeerPay, planPayment, resolveDnsAddrs } from '../src/node.ts'
+import { dialPayee, fetchAnchor, fetchBundle } from '../src/internal.ts'
 import type { PaymentProgress, PayPlan } from '../src/node.ts'
 
 // wallet-toolbox is CommonJS and uses @bsv/sdk's CommonJS build: keys it

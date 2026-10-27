@@ -6,10 +6,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { WalletInterface } from '@bsv/sdk'
-import {
-  DomainError, MAX_DOMAIN_FILE_BYTES, anchorRecordJson, checkPayeeDomain, domainEntry, domainFileText, formatPaymentLink, normalizeDomain, parsePaymentLink,
-  pay, utf8, verifyDomainFile
-} from '../../src/index.ts'
+import { DomainError, MAX_DOMAIN_FILE_BYTES, checkPayeeDomain, domainEntry, domainFileText, formatPaymentLink, normalizeDomain, parsePaymentLink, pay, verifyDomainFile } from '../../src/index.ts'
+import { anchorRecordJson, utf8 } from '../../src/internal.ts'
 import type { DomainFetch, PayContext } from '../../src/index.ts'
 import { DART_SEED7_FILE, SHOP_DOMAIN, SHOP_FILE, SHOP_KEY, SHOP_PEER } from '../fixtures/domain-files.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'

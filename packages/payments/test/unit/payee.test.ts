@@ -10,10 +10,9 @@ import assert from 'node:assert/strict'
 import { P2PKH, PrivateKey } from '@bsv/sdk'
 import type { Transaction, WalletInterface } from '@bsv/sdk'
 import type { Libp2p } from '@libp2p/interface'
-import {
-  PaymentError, acceptLivePayments, arcBroadcaster, createPaymentNode, payLive, unprovenChain
-} from '../../src/node.ts'
-import type { Broadcaster, LivePayeeEvent, LivePayeeOptions, ReceivedLivePayment } from '../../src/node.ts'
+import { PaymentError, acceptLivePayments, arcBroadcaster, createPaymentNode, payLive } from '../../src/node.ts'
+import { unprovenChain } from '../../src/internal.ts'
+import type { Broadcaster, LivePayeeEvent, LivePayeeOptions, NetworkOutcome, ReceivedLivePayment } from '../../src/node.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { encodeOnFrame, readOnFrame } from '../../src/live/frame.ts'
 import { PAYMENT_PROTOCOL } from '../../src/live/live.ts'
@@ -239,14 +238,82 @@ test('arcBroadcaster: EF to <base>/tx, follows RECEIVED, reports a refusal', asy
     return new Response(JSON.stringify({ txStatus: refuse ? 'REJECTED' : 'SEEN_ON_NETWORK' }), { status: 200 })
   }) as typeof fetch
   try {
-    const b = arcBroadcaster('testnet', { url: 'https://arc.test/', waitMs: 3000 })
-    assert.deepEqual(await b(unprovenChain(payment)), { accepted: true, status: 'SEEN_ON_NETWORK' })
+    const b = arcBroadcaster('testnet', { url: 'https://arc.test/', followMs: 3000 })
+    const sent = await b(unprovenChain(payment))
+    // RECEIVED is taken, not yet on the network: the outcome follows.
+    assert.equal(sent.accepted, true)
+    assert.equal(sent.status, 'RECEIVED')
+    assert.ok(sent.accepted && sent.settled !== undefined)
+    assert.deepEqual(await sent.settled, { kind: 'on-network', status: 'SEEN_ON_NETWORK' })
     assert.equal(calls.filter(c => c === 'POST https://arc.test/tx 0000000000ef').length, 2) // EF (BRC-30 marker): parent, then payment
     assert.ok(calls.at(-1)!.startsWith(`GET https://arc.test/tx/${payment.id('hex')}`))
     refuse = true
     const r = await b([payment])
-    assert.equal(r.accepted, false)
+    assert.ok(r.accepted && r.settled !== undefined)
+    assert.equal((await r.settled).kind, 'refused')
   } finally {
     globalThis.fetch = real
   }
+})
+
+test('arcBroadcaster: an answer already on the network is final; a refusal at once is not accepted', async () => {
+  const wallet = new FakeWallet()
+  const { tx } = await wallet.createAction({ description: 't', outputs: [{ lockingScript: '76a914' + '00'.repeat(20) + '88ac', satoshis: 10, outputDescription: 'x' }], options: { noSend: true } } as never)
+  const { Transaction: T } = await import('@bsv/sdk')
+  const payment = T.fromAtomicBEEF(tx!)
+  const real = globalThis.fetch
+  let answer = 'SEEN_ON_NETWORK'
+  globalThis.fetch = (async () => new Response(JSON.stringify({ txStatus: answer }), { status: 200 })) as typeof fetch
+  try {
+    const b = arcBroadcaster('testnet', { url: 'https://arc.test' })
+    assert.deepEqual(await b([payment]), { accepted: true, status: 'SEEN_ON_NETWORK' })
+    answer = 'DOUBLE_SPEND_ATTEMPTED'
+    assert.equal((await b([payment])).accepted, false)
+  } finally {
+    globalThis.fetch = real
+  }
+})
+
+/** A broadcaster that takes the payment, and gives the network's answer when [answer] resolves. */
+const onItsWay = (answer: Promise<NetworkOutcome>): Broadcaster => async () => ({ accepted: true, status: 'RECEIVED', settled: answer })
+
+test('taken but not yet on the network: final false, then kept and completed once the network has it', async () => {
+  await serving({ broadcast: onItsWay(new Promise(resolve => { setTimeout(() => { resolve({ kind: 'on-network', status: 'SEEN_ON_NETWORK' }) }, 200) })) }, async run => {
+    const r = await pay(new FakeWallet())
+    assert.equal(r.status, 'completed')
+    assert.deepEqual(run.events.map(e => e.kind), ['request', 'checking', 'on-the-way', 'paid'])
+    assert.equal(run.payments.length, 1)
+    assert.equal(run.payments[0]!.networkStatus, 'SEEN_ON_NETWORK')
+  })
+})
+
+test('taken, then refused by the network: nothing kept, the payer hears network-refused', async () => {
+  await serving({ broadcast: onItsWay(Promise.resolve({ kind: 'refused', status: 'DOUBLE_SPEND_ATTEMPTED', error: 'double spend' })) }, async run => {
+    await assert.rejects(pay(new FakeWallet()), (e: PaymentError) => e.code === 'network-refused' && /double spend/.test(e.message))
+    assert.equal(run.payments.length, 0)
+    assert.deepEqual(run.events.map(e => e.kind), ['request', 'checking', 'on-the-way', 'not-broadcast'])
+  })
+})
+
+test('taken, and no answer from the network in time: not kept, reported unsettled, the payer sees it sent', async () => {
+  await serving({ networkWaitMs: 200, broadcast: onItsWay(new Promise(() => {})) }, async run => {
+    const r = await pay(new FakeWallet())
+    assert.equal(r.status, 'sent')
+    assert.equal(run.payments.length, 0)
+    const last = run.events.at(-1)!
+    assert.equal(last.kind, 'unsettled')
+    assert.equal(last.kind === 'unsettled' && last.payment.txid, r.txid)
+  })
+})
+
+test('onPayment throws: the payer is still paid, and keep-failed carries the payment', async () => {
+  await serving({ onPayment: () => { throw new Error('database down') } }, async run => {
+    const r = await pay(new FakeWallet())
+    assert.equal(r.status, 'completed')
+    const failed = run.events.find(e => e.kind === 'keep-failed')
+    assert.ok(failed !== undefined && failed.kind === 'keep-failed')
+    assert.equal(failed.payment.txid, r.txid)
+    assert.match(failed.error, /database down/)
+    assert.equal(run.events.at(-1)!.kind, 'paid')
+  })
 })

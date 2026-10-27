@@ -2,9 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
-import {
-  DEFAULT_MESSAGE_BOX_HOST, PaymentError, PeerPayUndeliveredError, createPeerPayClient, payViaPeerPay
-} from '../../src/index.ts'
+import { DEFAULT_MESSAGE_BOX_HOST, PaymentError, PeerPayUndeliveredError, payViaPeerPay } from '../../src/index.ts'
+import { createPeerPayClient } from '../../src/internal.ts'
 import type { MessageBoxSender } from '../../src/index.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { payeeAcceptsToken } from '../support/peerpay-payee.ts'

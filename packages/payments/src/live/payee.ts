@@ -5,7 +5,8 @@
  *
  * Stream A: payment_request → invoice_response (one address) | payment_error.
  * Stream B: beef_payment (same sessionId) → the payment checked by SPV and
- * put on the network → payment_status.
+ * put on the network → payment_status; when the network had not shown it
+ * yet, payment_status with final: false, then payment_network → ack.
  *
  * To be reached, the node must hold a reservation on the Ricochet server's
  * circuit relay and tell the server its relay addresses (identify push):
@@ -29,6 +30,11 @@ import { PAYMENT_PROTOCOL } from './live.ts'
 
 /** The app's payee drops a session this long after its last change. */
 export const PAYEE_SESSION_MS = 60_000
+/**
+ * How long the payee waits for the network's answer to a payment ARC took
+ * but had not yet shown on the network, as the app's payee does.
+ */
+export const PAYEE_NETWORK_WAIT_MS = 240_000
 /** The app's payee cuts a note to this many characters. */
 export const PAYEE_MAX_NOTE = 280
 /**
@@ -70,7 +76,7 @@ export interface LiveInvoiceRequest {
   toWallet?: string
 }
 
-/** A payment checked by SPV and on the network: keep it in onPayment. */
+/** A payment checked by SPV and seen on the network: keep it in onPayment. */
 export interface ReceivedLivePayment {
   invoiceId: string
   /** The invoice's address and what it asked. */
@@ -85,12 +91,24 @@ export interface ReceivedLivePayment {
   /** BEEF V1 as the payer sent it: the payment last, with its ancestors and proofs. */
   beefV1: Uint8Array
   transaction: Transaction
-  /** What the broadcaster reported, e.g. SEEN_ON_NETWORK or RECEIVED. */
+  /** What the broadcaster reported, e.g. SEEN_ON_NETWORK. */
   networkStatus?: string
 }
 
+/** What the network did with a payment the broadcaster took before the network showed it. */
+export type NetworkOutcome =
+  | { kind: 'on-network', status?: string }
+  | { kind: 'refused', status?: string, error: string }
+  /** Still on its way when the broadcaster stopped following it. */
+  | { kind: 'unknown', status?: string }
+
+/**
+ * `settled` is there when the broadcaster took the payment but the network
+ * has not shown it yet (ARC's RECEIVED, for one): it resolves to what the
+ * network did. Without it, `accepted` means the network has the payment.
+ */
 export type BroadcastResult =
-  | { accepted: true, status?: string }
+  | { accepted: true, status?: string, settled?: Promise<NetworkOutcome> }
   | { accepted: false, status?: string, error: string }
 
 /**
@@ -102,9 +120,27 @@ export type Broadcaster = (chain: Transaction[]) => Promise<BroadcastResult>
 export type LivePayeeEvent =
   | { kind: 'request', request: LiveInvoiceRequest }
   | { kind: 'checking', request: LiveInvoiceRequest, txid?: string }
+  /**
+   * Checked, and taken by the broadcaster, but not yet seen on the network:
+   * not received until 'paid'. The payer has been told it is on its way.
+   */
+  | { kind: 'on-the-way', payment: ReceivedLivePayment }
+  /** Seen on the network, and onPayment has run: received. */
   | { kind: 'paid', payment: ReceivedLivePayment }
-  /** Checked, but the network did not take it: nothing was received. */
+  /**
+   * onPayment threw for a payment that is on the network. The payer was
+   * told it is paid; the coin is at the invoice's address with no record of
+   * yours. Keep `payment` some other way.
+   */
+  | { kind: 'keep-failed', payment: ReceivedLivePayment, error: string }
+  /** Checked, but the network did not take it, or refused it later: nothing was received. */
   | { kind: 'not-broadcast', request: LiveInvoiceRequest, txid: string, error: string }
+  /**
+   * Taken by the broadcaster, and still not seen on the network when the
+   * payee stopped waiting. The payer heard only that it is on its way, and
+   * onPayment has not run. Watch `payment.txid`: keep it if it lands.
+   */
+  | { kind: 'unsettled', payment: ReceivedLivePayment }
   /** Refused: the request or the payment did not check out. */
   | { kind: 'refused', payerPeerId: string, reason: string, request?: LiveInvoiceRequest }
 
@@ -113,7 +149,12 @@ export interface LivePayeeOptions {
   network: Network
   /** The address an invoice asks to be paid to. Use a new one per invoice. */
   invoiceAddress: (request: LiveInvoiceRequest) => string | Promise<string>
-  /** Called once a payment is checked and on the network, before the payer hears so. Keep the coin here. */
+  /**
+   * Called once a payment is checked and seen on the network, before the
+   * payer hears it is paid. Keep the coin here, durably, and make it safe to
+   * call twice for one txid. A throw is reported as a 'keep-failed' event;
+   * the payer is still told it is paid.
+   */
   onPayment: (payment: ReceivedLivePayment) => void | Promise<void>
   /** What checks merkle roots (SPV). Default: WhatsOnChain for the network. */
   chainTracker?: ChainTracker
@@ -128,6 +169,8 @@ export interface LivePayeeOptions {
   limits?: Partial<PayeeLimits>
   /** For each frame read. Default 30 000. */
   readMs?: number
+  /** How long to wait for a `settled` broadcast. Default PAYEE_NETWORK_WAIT_MS. */
+  networkWaitMs?: number
 }
 
 export interface LivePayee {
@@ -155,6 +198,7 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
   const sessionKey = (payerPeerId: string, sessionId: string): string => `${payerPeerId} ${sessionId}`
   const sessionMs = options.sessionMs ?? PAYEE_SESSION_MS
   const readMs = options.readMs ?? 30_000
+  const networkWaitMs = options.networkWaitMs ?? PAYEE_NETWORK_WAIT_MS
   const chainTracker = options.chainTracker ?? new WhatsOnChain(options.network === 'mainnet' ? 'main' : 'test')
   const broadcaster = options.broadcaster ?? arcBroadcaster(options.network)
   const limits = { ...PAYEE_LIMITS, ...options.limits }
@@ -185,6 +229,24 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
 
   // One frame each, written with one send(): the Dart reader takes a frame in one read.
   const reply = (stream: Stream, message: Record<string, unknown>): void => { stream.send(encodeOnFrame(message)) }
+
+  const keep = async (payment: ReceivedLivePayment): Promise<void> => {
+    try {
+      await options.onPayment(payment)
+    } catch (e) {
+      if (options.onEvent === undefined) console.error('acceptLivePayments: onPayment failed for', payment.txid, e)
+      event({ kind: 'keep-failed', payment, error: errorText(e) })
+    }
+  }
+
+  // The network's answer to a payment answered early, on the payer's stream;
+  // the payer acknowledges it. A payer gone by then reads the txid itself.
+  const tellNetwork = async (stream: Stream, message: Record<string, unknown>): Promise<void> => {
+    try {
+      reply(stream, message)
+      await readOnFrame(stream, AbortSignal.timeout(10_000))
+    } catch { /* the payer left */ }
+  }
 
   const onRequest = async (stream: Stream, msg: Record<string, unknown>, payerPeerId: string): Promise<void> => {
     const sessionId = typeof msg.sessionId === 'string' ? msg.sessionId : ''
@@ -287,13 +349,32 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
         transaction: tx,
         ...(sent.status !== undefined ? { networkStatus: sent.status } : {})
       }
-      // On the network now: tell the payer it is paid even when keeping it fails here.
-      try { await options.onPayment(payment) } catch (e) { console.error('acceptLivePayments: onPayment failed for', txid, e) }
-      reply(stream, {
+      const status = {
         type: 'payment_status', success: true, txid, broadcasted: true, arcStatus: 'broadcasting',
         ...(sent.status !== undefined ? { networkStatus: sent.status } : {}), sessionId
+      }
+      if (sent.settled === undefined) {
+        // On the network now: the payer is told it is paid even when keeping it fails here.
+        await keep(payment)
+        reply(stream, status)
+        event({ kind: 'paid', payment })
+        return
+      }
+      // Taken, and on its way to the network: the payer hears so now and the
+      // outcome on this stream when it comes, as from the app's payee. Not
+      // received until then: a payment the network refuses pays nothing.
+      reply(stream, { ...status, final: false })
+      event({ kind: 'on-the-way', payment })
+      const outcome = await waitFor(sent.settled, networkWaitMs)
+      const settled = outcome.status !== undefined ? { ...payment, networkStatus: outcome.status } : payment
+      if (outcome.kind === 'unknown') { event({ kind: 'unsettled', payment: settled }); return }
+      if (outcome.kind === 'on-network') await keep(settled)
+      event(outcome.kind === 'on-network' ? { kind: 'paid', payment: settled } : { kind: 'not-broadcast', request, txid, error: outcome.error })
+      await tellNetwork(stream, {
+        type: 'payment_network', sessionId, txid, onNetwork: outcome.kind === 'on-network',
+        ...(outcome.status !== undefined ? { networkStatus: outcome.status } : {}),
+        ...(outcome.kind === 'refused' ? { error: outcome.error } : {})
       })
-      event({ kind: 'paid', payment })
     } catch (e) {
       const reason = e instanceof Refusal ? e.message : `The payment could not be checked: ${errorText(e)}`
       reply(stream, { type: 'payment_status', success: false, error: reason, sessionId })
@@ -321,6 +402,17 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
       sessions.clear()
       await libp2p.unhandle(PAYMENT_PROTOCOL)
     }
+  }
+}
+
+/** [settled], or 'unknown' when it takes longer than [ms] or fails. */
+async function waitFor (settled: Promise<NetworkOutcome>, ms: number): Promise<NetworkOutcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<NetworkOutcome>(resolve => { timer = setTimeout(() => { resolve({ kind: 'unknown' }) }, ms) })
+  try {
+    return await Promise.race([settled.catch((): NetworkOutcome => ({ kind: 'unknown' })), late])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -366,18 +458,39 @@ export interface ArcOptions {
   /** ARC base URL; POST <url>/tx. Default DEFAULT_ARC for the network. */
   url?: string
   apiKey?: string
-  /** How long to follow a RECEIVED answer for the network's (Arcade broadcasts afterwards). Default 8000. */
-  waitMs?: number
+  /**
+   * How long `settled` follows an answer that is not yet on the network
+   * (RECEIVED, for one: Arcade broadcasts afterwards). Default 30 000, as
+   * the app's wallet.
+   */
+  followMs?: number
 }
 
-const IN_FLIGHT = new Set(['RECEIVED', 'QUEUED', 'STORED', 'ANNOUNCED_TO_NETWORK', 'REQUESTED_BY_NETWORK', 'SENT_TO_NETWORK', 'ACCEPTED_BY_NETWORK'])
+const ON_NETWORK = new Set(['SEEN_ON_NETWORK', 'SEEN_MULTIPLE_NODES', 'MINED'])
 const REFUSED = new Set(['REJECTED', 'DOUBLE_SPEND_ATTEMPTED'])
 
-/** Submits to ARC as the app does (`{ rawTx: <EF hex> }`), then follows an in-flight answer a few seconds. */
+/**
+ * Submits to ARC as the app does (`{ rawTx: <EF hex> }`). An answer already
+ * on the network is final; any other comes with `settled`, which asks ARC
+ * every second until the network has the payment or refuses it.
+ */
 export function arcBroadcaster (network: Network, opts: ArcOptions = {}): Broadcaster {
   const base = (opts.url ?? (network === 'mainnet' ? DEFAULT_ARC.mainnet : DEFAULT_ARC.testnet)).replace(/\/+$/, '')
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.apiKey !== undefined ? { Authorization: `Bearer ${opts.apiKey}` } : {}) }
-  const waitMs = opts.waitMs ?? 8000
+  const followMs = opts.followMs ?? 30_000
+  const follow = async (txid: string, status: string | undefined): Promise<NetworkOutcome> => {
+    const until = Date.now() + followMs
+    while (Date.now() < until) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      try {
+        const r = await fetch(`${base}/tx/${txid}`, { headers, credentials: 'omit' })
+        if (r.ok) status = ((await r.json()) as { txStatus?: string }).txStatus ?? status
+      } catch { /* asked again */ }
+      if (status !== undefined && ON_NETWORK.has(status)) return { kind: 'on-network', status }
+      if (status !== undefined && REFUSED.has(status)) return { kind: 'refused', status, error: 'The network refused the payment' }
+    }
+    return { kind: 'unknown', ...(status !== undefined ? { status } : {}) }
+  }
   return async (chain) => {
     const payment = chain[chain.length - 1]
     if (payment === undefined) return { accepted: false, error: 'Nothing to broadcast' }
@@ -398,17 +511,8 @@ export function arcBroadcaster (network: Network, opts: ArcOptions = {}): Broadc
     } catch (e) {
       return { accepted: false, error: `ARC could not be reached: ${errorText(e)}` }
     }
-    const txid = payment.id('hex')
-    const until = Date.now() + waitMs
-    while ((status === undefined || IN_FLIGHT.has(status)) && Date.now() < until) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      try {
-        const r = await fetch(`${base}/tx/${txid}`, { headers, credentials: 'omit' })
-        if (r.ok) status = ((await r.json()) as { txStatus?: string }).txStatus ?? status
-      } catch { /* asked again */ }
-    }
-    if (status !== undefined && REFUSED.has(status)) return { accepted: false, status, error: 'The network refused the payment' }
-    return { accepted: true, ...(status !== undefined ? { status } : {}) }
+    if (status !== undefined && ON_NETWORK.has(status)) return { accepted: true, status }
+    return { accepted: true, ...(status !== undefined ? { status } : {}), settled: follow(payment.id('hex'), status) }
   }
 }
 
