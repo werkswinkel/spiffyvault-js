@@ -33,7 +33,7 @@ import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { Hash, PrivateKey, Utils } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
-import { Setup } from '@bsv/wallet-toolbox'
+import { Services, Setup } from '@bsv/wallet-toolbox'
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys'
 import { RicochetClient } from '@go-ricochet/ricochet/node'
 import { SPIFFYVAULT_RICOCHET, createPaymentNode, isPaymentError, pay, payLive, payOffline, payViaPeerPay, planPayment, resolveDnsAddrs } from '../src/node.ts'
@@ -72,6 +72,14 @@ function loadRootKey (path: string): PrivateKey {
 /** The funding key: a BRC-42 child of the root for the root itself, so it differs from the identity key. */
 function fundingKey (root: PrivateKey): PrivateKey { return root.deriveChild(root.toPublicKey(), 'spiffyvault-e2e funding') }
 
+// Broadcast through BSVA's Arcade first, as the payee does (DEFAULT_ARC):
+// the toolbox's testnet default is TAAL's ARC, which wants an API key
+// (401 without one). Setup has no option for it, so set it where Setup
+// reads its defaults.
+const ARCADE_TESTNET = 'https://arcade-v2-testnet-us-1.bsvblockchain.tech'
+const defaultServiceOptions = Services.createDefaultOptions.bind(Services)
+Services.createDefaultOptions = chain => ({ ...defaultServiceOptions(chain), ...(chain === 'test' ? { arcadeUrl: ARCADE_TESTNET } : {}) })
+
 async function openWallet (path: string) {
   const root = loadRootKey(path)
   const identityKey = root.toPublicKey().toString()
@@ -82,6 +90,17 @@ async function openWallet (path: string) {
     databaseName: 'spiffyvault_e2e'
   })
   return { root, setup, wallet: setup.wallet as unknown as WalletInterface }
+}
+
+/**
+ * Broadcasts what the wallet still holds back: the toolbox queues its own
+ * transactions (taking coins in, change) for its monitor, and this tool
+ * does not keep a monitor running between commands.
+ */
+async function sendQueued (setup: Awaited<ReturnType<typeof openWallet>>['setup']): Promise<void> {
+  if (setup.monitor._tasks.length === 0) setup.monitor.addDefaultTasks()
+  const log = await setup.monitor.runTask('SendWaiting')
+  if (log.trim() !== '') say(`queued transactions sent:\n${log.trim().split('\n').map(l => `  ${l}`).join('\n')}`)
 }
 
 async function close (setup: Awaited<ReturnType<typeof openWallet>>['setup']): Promise<void> {
@@ -117,6 +136,9 @@ async function cmdFund (path: string, arg: string | undefined): Promise<void> {
   const keyPair = { privateKey: cjsKey, publicKey: cjsKey.toPublicKey(), address } as unknown as Parameters<typeof Setup.fundWalletFromP2PKHOutpoints>[2]
   const r = await Setup.fundWalletFromP2PKHOutpoints(setup.wallet, vouts.map(v => `${txid}.${v}`), keyPair, beef.toBinary())
   for (const x of r) say(`  ${x.outpoint}: ${x.success ? `taken in (${x.txid ?? ''})` : `failed: ${x.error ?? ''}`}`)
+  // The monitor sends only what is some seconds old.
+  await new Promise(resolve => setTimeout(resolve, 8_000))
+  await sendQueued(setup)
   say(`balance: ${await setup.wallet.balance()} sats`)
   await close(setup)
 }
@@ -134,6 +156,7 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
   if (!['auto', 'live', 'offline', 'peerpay'].includes(mode)) fail('--path auto|live|offline|peerpay')
   const dry = o['dry-run'] === true
   const { setup, wallet } = await openWallet(path)
+  if (!dry) await sendQueued(setup)
   say(`payer identity key: ${(await wallet.getPublicKey({ identityKey: true })).publicKey}`)
   say(`balance: ${await setup.wallet.balance()} sats`)
 
