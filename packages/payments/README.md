@@ -303,6 +303,13 @@ days). The wallet then:
    has never seen the payment. A payment the payee broadcast in time is
    left alone.
 
+It waits for clear answers (the payment unknown to the network, its coin
+unspent) and defers on anything else, so the reclaim can go out some
+minutes after the deadline. The reclaimed coins count in the wallet's
+balance once the reclaim is in a block. A payee that collects the payment
+after that finds it cannot be broadcast; the SpiffyVault app shows it as
+failed.
+
 `result.reclaimAt` says when (ms since 1970). What it needs:
 
 - **A wallet with BRC-177**: Wallet Toolbox 2.14.7 or later. A wallet
