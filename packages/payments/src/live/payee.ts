@@ -59,9 +59,12 @@ export interface PayeeLimits {
   /** Requests all payers together may make a minute. */
   perMinute: number
 }
-/** Default ARC endpoints, the ones the app broadcasts to (POST <base>/tx). */
+/**
+ * Default broadcasters, the BSV Association's Arcade, as the app uses
+ * (POST <base>/tx; Arcade serves the ARC API, which ends 30 November 2026).
+ */
 export const DEFAULT_ARC = {
-  mainnet: 'https://arc.gorillapool.io/v1',
+  mainnet: 'https://arcade-v2-us-1.bsvblockchain.tech',
   testnet: 'https://arcade-v2-testnet-us-1.bsvblockchain.tech'
 } as const
 

@@ -588,14 +588,15 @@ did.
 |---|---|---|---|---|---|
 | Ricochet server | SpiffyVault's, `ricochet.spiffyvault.net` (`SPIFFYVAULT_RICOCHET`; `152.42.240.103` when DNS fails) | The relay and DHT for live payments; the payee's anchor record, pre-key bundle and one-time pre-keys; the mailbox for offline payments | See who pays whom, and when. Drop or hold back a payment or a record. Hold back one-time pre-keys, so a payment is sealed with the bundle alone. It cannot read a live payment (libp2p encrypts it end to end through the relay) or a sealed one. It cannot forge a record, bundle or pre-key: each is signed by the payee's key and checked | No live and no offline path. `pay()` fails before anything is handed over, so nothing is spent. A payee on `acceptLivePayments` cannot be reached | `relays`, and the `ricochet` client you pass |
 | WhatsOnChain | For the payee's network | The payee: checking the merkle roots in a payment's proof (SPV) | Say a root is in the chain when it is not, so the payee takes a payment built on coins that do not exist. This is one reason to wait for a block before handing over goods of higher value | The payee refuses the payment as not checked. Nothing is broadcast and the payer keeps the coins | `chainTracker`: any `ChainTracker` from `@bsv/sdk`, best of all block headers you keep yourself |
-| The broadcaster | Arcade on testnet, GorillaPool's ARC on mainnet (`DEFAULT_ARC`) | The payee: putting a checked payment on the network, and following it there | Lose a payment, or say the network has seen it when it has not. Only a block proves the network took it | `not-broadcast`; or `unsettled` when it took the payment and then went quiet: watch the txid before handing over goods ([Being paid](#being-paid)) | `broadcaster`, or `arcBroadcaster(network, { url, apiKey })` |
+| The broadcaster | The BSV Association's Arcade on both networks (`DEFAULT_ARC`) | The payee: putting a checked payment on the network, and following it there | Lose a payment, or say the network has seen it when it has not. Only a block proves the network took it | `not-broadcast`; or `unsettled` when it took the payment and then went quiet: watch the txid before handing over goods ([Being paid](#being-paid)) | `broadcaster`, or `arcBroadcaster(network, { url, apiKey })` |
 | BSVA's message box | `https://messagebox.bsvblockchain.tech` (`DEFAULT_MESSAGE_BOX_HOST`), the one the app reads | PeerPay: carrying the payment token to the payee | See who pays whom. Drop the token, so the payee never learns of the payment | Your wallet broadcasts before the token is sent, so a payment can be on the network with its token not delivered: `PeerPayUndeliveredError`. Send the token again with `deliverPeerPayToken()`; do not pay again | `peerPay.host`, but the app reads only BSVA's |
 | The payee's website | The link's `d` | The domain check: `https://<d>/.well-known/spiffyvault.json` | Whoever runs the domain can list any payee. The check proves the domain names the payee, not that the payer meant that domain | `pay()` refuses the link with `DomainError` before anything is asked of the payee | `domainFetch` |
 | Your wallet | The one you pass | Funding, broadcasting PeerPay payments, and reclaiming offline payments the payee never collects | Whatever its own services do (the wallet toolbox uses WhatsOnChain and ARC) | No payment can be built | Your choice |
 
-The mainnet defaults will change before the SDK is used on mainnet: ARC
-is retired on 30 November 2026, and payees move to
-[the broadcaster](https://github.com/bsv-blockchain/broadcaster).
+ARC is retired on 30 November 2026, so the payee broadcasts to
+[Arcade](https://github.com/bsv-blockchain/broadcaster), which serves the
+same API: `https://arcade-v2-us-1.bsvblockchain.tech` on mainnet and
+`https://arcade-v2-testnet-us-1.bsvblockchain.tech` on testnet.
 
 `@spiffyvault/sign-in` uses no outside service: the app posts straight to
 your callback.
