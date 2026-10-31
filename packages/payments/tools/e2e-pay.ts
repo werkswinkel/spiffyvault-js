@@ -260,6 +260,9 @@ async function cmdMonitor (path: string, minutes: string | undefined): Promise<v
   let last = -1
   while (Date.now() < end) {
     await new Promise(resolve => setTimeout(resolve, 15_000))
+    // What the BRC-177 expiry check decided (the scheduler does not print it).
+    const expiry = (await monitor.runTask('NoSendExpiry')).trim()
+    if (expiry !== '') say(`  ${new Date().toISOString()} ${expiry}`)
     const balance = await setup.wallet.balance()
     if (balance !== last) say(`  ${new Date().toISOString()} balance ${balance} sats`)
     last = balance
