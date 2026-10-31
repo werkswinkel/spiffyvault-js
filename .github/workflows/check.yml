@@ -31,3 +31,54 @@ jobs:
         run: npm run test:unit --workspace @spiffyvault/sign-in
       - name: Browser bundle has no Node built-ins
         run: npm run check:bundle --workspace @spiffyvault/payments
+
+  # The live and offline paths against a real go-ricochet: the same suites
+  # as `npm run test:integration:docker` and `test:browser:docker` locally,
+  # with PostgreSQL as a service container instead of test/docker-compose.yml.
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      RICOCHET_SRC: ${{ github.workspace }}/go-ricochet
+      RICOCHET_PG_HOST: localhost
+      RICOCHET_PG_PORT: '5432'
+      RICOCHET_PG_USER: postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The server the suites run against, at a known commit: move it on
+      # deliberately when go-ricochet changes what the SDK relies on.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: stephanfeb/go-ricochet
+          ref: 193f512634ab7753a9f1daeca36df470d557bdde
+          path: go-ricochet
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go-ricochet/go.mod
+          cache-dependency-path: go-ricochet/go.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      - name: Payments integration (Node over UDX, through the relay)
+        run: npm run test:integration --workspace @spiffyvault/payments
+      - name: Payments in headless Chrome (WS and WSS)
+        run: npm run test:browser --workspace @spiffyvault/payments
+        env:
+          PAYMENTS_CHROMIUM_CHANNEL: chrome
+      - name: Sign-in example site
+        run: npm run test:integration --workspace @spiffyvault/sign-in

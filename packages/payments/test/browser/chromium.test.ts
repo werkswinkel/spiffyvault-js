@@ -14,7 +14,7 @@ import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { RicochetClient, createRicochetNode } from '@go-ricochet/ricochet/node'
 import type { Libp2p } from '@libp2p/interface'
-import { startServer } from '../integration/server.ts'
+import { GO_LIBP2P_RELAY_LIMIT, startServer } from '../integration/server.ts'
 import type { TestServer } from '../integration/server.ts'
 import { relayedPayee } from '../integration/live-peers.ts'
 import type { RelayedPayee } from '../integration/live-peers.ts'
@@ -30,7 +30,8 @@ const payees: RelayedPayee[] = []
 const nodes: Libp2p[] = []
 
 before(async () => {
-  server = await startServer()
+  // A relay that limits its connections (see test/integration/live.test.ts).
+  server = await startServer({ relayLimit: GO_LIBP2P_RELAY_LIMIT })
   session = await openPage(server.certSpki !== undefined ? { trustSpki: server.certSpki } : {})
 })
 

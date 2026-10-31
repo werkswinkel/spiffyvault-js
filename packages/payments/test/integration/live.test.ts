@@ -11,14 +11,17 @@ import { PaymentError, createPaymentNode, payLive } from '../../src/node.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { relayedPayee } from './live-peers.ts'
 import type { RelayedPayee } from './live-peers.ts'
-import { startServer } from './server.ts'
+import { GO_LIBP2P_RELAY_LIMIT, startServer } from './server.ts'
 import type { TestServer } from './server.ts'
 
 let server: TestServer
 let payer: Libp2p
 const payees: RelayedPayee[] = []
 before(async () => {
-  server = await startServer()
+  // A relay that limits its connections, as an operator may set: the
+  // payer must keep each frame within a limited connection's allowance.
+  // The other suites run on go-ricochet's default, unlimited relay.
+  server = await startServer({ relayLimit: GO_LIBP2P_RELAY_LIMIT })
   payer = (await createPaymentNode({ udxOnly: true })).node
 })
 afterEach(async () => { for (const p of payees.splice(0)) await p.stop() })

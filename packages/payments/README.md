@@ -635,6 +635,23 @@ From `packages/payments`:
 | `npm run test:browser` | as above, plus Chrome | Live from headless Chrome over WS and WSS, through the relay to a UDX payee; offline from Chrome |
 | `npm run check:bundle` | | The browser entries have no Node built-ins, no UDX transport and no wallet-toolbox |
 
+The integration and browser suites build go-ricochet from a checkout next
+to this repository (`RICOCHET_SRC` names another), run it on loopback, and
+make their own database in a PostgreSQL. Without a PostgreSQL of your own,
+start one in Docker:
+
+```sh
+npm run test:db                    # PostgreSQL 17 on 127.0.0.1:55432 (test/docker-compose.yml)
+npm run test:integration:docker
+npm run test:browser:docker
+npm run test:db:stop
+```
+
+CI runs all of them on every push, against a pinned go-ricochet commit
+(`.github/workflows/check.yml`). The live and browser suites run on a
+relay that limits its connections, as an operator may set; the others on
+go-ricochet's default relay, which does not.
+
 ## A real payment on testnet
 
 `tools/e2e-pay.ts` pays a phone's payment link from a

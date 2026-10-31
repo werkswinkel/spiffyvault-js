@@ -12,7 +12,9 @@
  * Environment:
  *   RICOCHET_SRC      go-ricochet checkout (default ../go-ricochet next to this repo)
  *   RICOCHET_TEST_DB  database name (default ricochet_payments_test)
- *   RICOCHET_PG_HOST  PostgreSQL host (default localhost), RICOCHET_PG_USER (default $USER)
+ *   RICOCHET_PG_HOST  PostgreSQL host (default localhost), RICOCHET_PG_PORT (default 5432),
+ *                     RICOCHET_PG_USER (default $USER), RICOCHET_PG_PASSWORD (default none).
+ *                     `npm run test:db` starts one in Docker: see test/docker-compose.yml.
  *   RICOCHET_KEEP     keep the temp dir and database for inspection
  */
 
@@ -33,7 +35,10 @@ const here = new URL('.', import.meta.url).pathname
 export const ricochetSrc = resolve(process.env.RICOCHET_SRC ?? join(here, '../../../../../go-ricochet'))
 export const dbName = process.env.RICOCHET_TEST_DB ?? 'ricochet_payments_test'
 const pgHost = process.env.RICOCHET_PG_HOST ?? 'localhost'
+const pgPort = process.env.RICOCHET_PG_PORT ?? '5432'
 const pgUser = process.env.RICOCHET_PG_USER ?? process.env.USER ?? 'postgres'
+const pgPassword = process.env.RICOCHET_PG_PASSWORD ?? ''
+if (!/^\d+$/.test(pgPort)) throw new Error(`RICOCHET_PG_PORT is not a port: ${pgPort}`)
 
 if (!/^[a-z0-9_]+$/.test(dbName) || !dbName.includes('test')) {
   throw new Error(`refusing to use database "${dbName}": the name must contain "test" and only [a-z0-9_]`)
@@ -77,7 +82,8 @@ async function freeUdpPort (): Promise<number> {
 }
 
 async function psql (db: string, args: string[]): Promise<string> {
-  const { stdout } = await run('psql', ['-h', pgHost, '-U', pgUser, '-v', 'ON_ERROR_STOP=1', '-q', '-X', db, ...args])
+  const { stdout } = await run('psql', ['-h', pgHost, '-p', pgPort, '-U', pgUser, '-v', 'ON_ERROR_STOP=1', '-q', '-X', db, ...args],
+    { env: { ...process.env, ...(pgPassword !== '' ? { PGPASSWORD: pgPassword } : {}) } })
   return stdout
 }
 
@@ -130,7 +136,19 @@ async function makeCert (dir: string): Promise<{ cert: string, key: string, pem:
   return { cert, key, pem, spki: createHash('sha256').update(spkiDer).digest('base64') }
 }
 
-export async function startServer (): Promise<TestServer> {
+export interface ServerOptions {
+  /**
+   * Cut each relayed connection after this long or this many bytes, so
+   * peers see a limited connection. go-ricochet sets no limit by default
+   * (since 40fa8a0); an operator may set one.
+   */
+  relayLimit?: { durationSec: number, dataBytes: number }
+}
+
+/** go-libp2p's own relay limits, which go-ricochet used before 40fa8a0. */
+export const GO_LIBP2P_RELAY_LIMIT = { durationSec: 120, dataBytes: 128 * 1024 }
+
+export async function startServer (options: ServerOptions = {}): Promise<TestServer> {
   if (!existsSync(join(ricochetSrc, 'cmd/ricochet'))) throw new Error(`go-ricochet source not found at ${ricochetSrc} (set RICOCHET_SRC)`)
   const binary = await buildServer()
   await createDatabase()
@@ -158,11 +176,14 @@ export async function startServer (): Promise<TestServer> {
     'relay_limits:',
     '  max_reservations_per_ip: 256',
     '  max_reservations_per_peer: 16',
+    ...(options.relayLimit !== undefined
+      ? [`  connection_duration_sec: ${options.relayLimit.durationSec}`, `  connection_data: ${options.relayLimit.dataBytes}`]
+      : []),
     'storage:',
     `  data_directory: ${join(dir, 'data')}`,
     'database:',
     `  host: ${pgHost}`,
-    '  port: 5432',
+    `  port: ${pgPort}`,
     `  name: ${dbName}`,
     `  username: ${pgUser}`,
     '  sslmode: disable',
@@ -176,7 +197,7 @@ export async function startServer (): Promise<TestServer> {
   const child: ChildProcess = spawn(binary, ['--development', '--config', join(dir, 'config.yaml'), '--data-dir', join(dir, 'data')], {
     cwd: dir,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, RICOCHET_PG_PASSWORD: process.env.RICOCHET_PG_PASSWORD ?? '' }
+    env: { ...process.env, RICOCHET_PG_PASSWORD: pgPassword }
   })
   child.stdout!.on('data', (d: Buffer) => { output += d.toString() })
   child.stderr!.on('data', (d: Buffer) => { output += d.toString() })

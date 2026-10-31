@@ -1,0 +1,26 @@
+# A throwaway PostgreSQL for the integration and browser suites: the
+# harness (test/integration/server.ts) creates its own database in it for
+# each run, builds go-ricochet from source and runs it on loopback.
+#
+#   npm run test:db          start it (waits until it answers)
+#   npm run test:db:stop     stop it and drop its data
+#
+# Then run the suites with RICOCHET_PG_PORT=55432 RICOCHET_PG_USER=postgres
+# (npm run test:integration:docker and test:browser:docker set them).
+# Trust auth on loopback only: it is a test database with nothing in it.
+name: spiffyvault-payments-test
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - 127.0.0.1:55432:5432
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, postgres]
+      interval: 1s
+      timeout: 3s
+      retries: 30
