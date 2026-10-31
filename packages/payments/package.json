@@ -1,6 +1,6 @@
 {
   "name": "@spiffyvault/payments",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pay a SpiffyVault user from a web app, a JS or Electron wallet, or a Node service: PeerPay, offline (Ricochet mailbox) and live (libp2p) payments, byte-compatible with the SpiffyVault app.",
   "license": "Apache-2.0",
   "repository": {
