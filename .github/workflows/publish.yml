@@ -11,7 +11,8 @@ name: publish
 # goes public when a maintainer approves it with 2FA, on npmjs.com or with
 # `npm stage approve <id>`. The first release of each package, 0.1.0, was
 # published by hand: npm lets a workflow publish a package only after the
-# package exists.
+# package exists. A tag for a version already on npm (one published by
+# hand) is checked and then skipped.
 
 on:
   push:
@@ -53,7 +54,15 @@ jobs:
             echo "tag says $version, $dir/package.json says $actual"; exit 1
           fi
           echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          # A version published by hand (as 0.1.0 and 0.1.1 were) is left alone.
+          name=$(node -p "require('./$dir/package.json').name")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on npm; nothing to publish"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
       - run: npm run test:unit
+        if: steps.pkg.outputs.published != 'true'
         working-directory: ${{ steps.pkg.outputs.dir }}
       - run: npm stage publish --provenance --access public
+        if: steps.pkg.outputs.published != 'true'
         working-directory: ${{ steps.pkg.outputs.dir }}
