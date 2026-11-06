@@ -30,3 +30,10 @@ The SpiffyVault apps themselves are reported the same way.
 Testnet only for now. The cryptography had an outside review in October
 2026, and the fixes from it are not yet re-checked by the reviewer, so do
 not use the SDK for mainnet funds yet.
+
+Some checks are yours, not the library's: matching each payment to its
+order (the payer's app sets the amount), keeping payments durably, and
+keeping the payee's keys apart from your web application. See
+"Matching payments to your orders" and "Running a payee safely" in
+`packages/payments/README.md`, and the note on more than one server process
+in `packages/sign-in/README.md`.

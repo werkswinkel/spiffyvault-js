@@ -433,6 +433,11 @@ try {
 
 ## Being paid
 
+Before you take real orders, read [Matching payments to your
+orders](#matching-payments-to-your-orders) and [Running a payee
+safely](#running-a-payee-safely): the checks there are yours, not the
+library's.
+
 A node can be paid the way a phone is, on each path:
 `acceptLivePayments()` (below), `acceptPeerPayPayments()` ([Being paid by
 PeerPay](#being-paid-by-peerpay)) and `acceptOfflinePayments()` ([Being
@@ -443,7 +448,7 @@ circuit relay, and the payment arrives as it happens.
 <!-- example: examples/payee.ts#payee-imports -->
 ```ts
 import { acceptLivePayments, createPaymentNode, formatPaymentLink, signPaymentLink, waitUntilReachable } from '@spiffyvault/payments/node'
-import type { LivePayeeOptions, ReceivedLivePayment } from '@spiffyvault/payments/node'
+import type { LiveInvoiceRequest, LivePayeeOptions, ReceivedLivePayment } from '@spiffyvault/payments/node'
 ```
 <!-- /example -->
 
@@ -454,8 +459,9 @@ const { node, privateKey } = await createPaymentNode({ payee: true, ...(relay !=
 await waitUntilReachable(node)
 const payee = await acceptLivePayments(node, {
   network: 'testnet',
+  screen: r => refuse(r), // the payer sets the amount: refuse what does not match an open order
   invoiceAddress: r => addressFor(r.invoiceId), // a new address per invoice, one you can spend
-  onPayment: p => { keep(p) }, // checked by SPV and seen on the network: keep p.beefV1 and p.vouts, once per txid
+  onPayment: p => { keep(p) }, // checked by SPV and seen on the network: keep the coin, then check the order
   onEvent: e => { console.log(`payee: ${e.kind}`) }, // 'keep-failed' and 'unsettled' carry a payment to keep or watch
   ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and ARC
 })
@@ -712,11 +718,14 @@ const request = await createPaymentRequest(
 <!-- /example -->
 
 Pass the request to your page as JSON. While it is open, your server
-answers the widget with a `RequestStatus`:
+answers the widget with a `RequestStatus`. Your payee must check each
+request and payment against the order first: see [Matching payments to
+your orders](#matching-payments-to-your-orders).
 
 <!-- example: examples/widget.ts#widget-status -->
 ```ts
-// Your payee's onPayment marks the order paid; until then the link is still shown.
+// Your payee's onPayment marks the order paid (orderPaid, below); until then the link
+// is still shown. Answer only the browser that placed the order: a status carries the txid.
 return order.paidTxid !== undefined
   ? { id: order.id, step: 'paid', path: 'live', txid: order.paidTxid }
   : { id: order.id, step: 'shown' }
@@ -795,6 +804,112 @@ Options:
 
 `mountPayment` returns a function that stops the widget and removes it.
 
+## Matching payments to your orders
+
+The library knows nothing of your orders. Every check that ties a payment
+to an order is yours, and the examples above leave them out to stay short.
+A shop that skips them can be paid 1 sat for a 37,000 sat order.
+
+Why: in a live payment, **the payer's app sets the amount and the note**.
+A signed link tells an honest app what to send, and the app sends it, but
+nothing makes a payer follow the link. `acceptLivePayments` invoices the
+amount the request asks for, and `onPayment` only means that this amount
+arrived. A PeerPay or offline payment says what it pays; it never passes
+`screen` at all.
+
+So, on the live path, refuse a request that does not match an open order
+in `screen` (it runs before `invoiceAddress`):
+
+<!-- example: examples/widget.ts#orders-imports -->
+```ts
+import { refInNote } from '@spiffyvault/payments'
+import type { LiveInvoiceRequest } from '@spiffyvault/payments'
+```
+<!-- /example -->
+
+<!-- example: examples/widget.ts#orders-screen -->
+```ts
+// The payer's app sets the amount and the note. The link tells an honest app what to
+// send; nothing makes a payer follow it. So the request must name an open order, unpaid,
+// and ask its total.
+const order = orders.get(refInNote(request.note) ?? '')
+if (order === undefined) return 'Pay from the order’s pay screen.'
+if (order.paidTxid !== undefined) return `Order ${order.id} is paid.`
+if (request.amountSats !== order.totalSats) return `Order ${order.id} is for ${order.totalSats} sats.`
+return undefined
+```
+<!-- /example -->
+
+And in every `onPayment` (live, PeerPay and offline), after the coin is
+kept, check the order again:
+
+<!-- example: examples/widget.ts#orders-paid -->
+```ts
+// Check again here: PeerPay and offline payments never pass screen, and a payment can
+// come twice (after a restart). Keep the coin first, whatever this says.
+const order = orders.get(refInNote(p.note) ?? '')
+if (order === undefined) return false // no order: the coin is yours, the payer may ask for it
+if (order.paidTxid === p.txid) return true // the same payment again
+if (order.paidTxid !== undefined) return false // paid already, by another payment: refund it
+if (p.paidSats < order.totalSats) return false // too little: refund it, or ask for the rest
+order.paidTxid = p.txid // in your database, in the same transaction as the kept coin
+return true
+```
+<!-- /example -->
+
+What else to get right:
+
+- **A new address for every invoice.** `invoiceAddress` is called once per
+  invoice; return an address you have not given out before. With one
+  address for two invoices, one transaction pays both: the payer sends it
+  twice, and the broadcaster reports a transaction it already has as on
+  the network. One txid pays one order, never two.
+- **Keep the payment before `onPayment` returns.** Write the coin (live:
+  `beefV1`, `vouts` and the invoice's key; PeerPay and offline: the
+  outputs, by `internalizeAction`) and the order's new state to durable
+  storage, in one transaction. Do not hand the work to a queue and return.
+- **Make `onPayment` safe to call twice for one txid.** A PeerPay or
+  offline payment can come again after a restart.
+- **Handle `keep-failed`.** When a live `onPayment` throws, the payer is
+  still told the payment is done, because it is on the network. The event
+  carries the whole payment: keep it another way, or alert someone.
+- **Handle `unsettled`.** The broadcaster took the payment and went quiet.
+  `onPayment` has not run. Watch `payment.txid` and mark the order paid
+  when it is in a block.
+- **When a payment does not pay an order** (no ref, an unknown ref, too
+  little, or the order paid already), the coin is still yours: keep it,
+  and refund it or ask for the rest. Do not drop it.
+
+## Running a payee safely
+
+A payee holds hot keys: the node's libp2p key (it signs your links and
+domain file, and opens offline payments), the BRC-100 wallet that PeerPay
+and offline payments pay, the keys behind your invoice addresses, and the
+offline payee's store. Whoever takes the server takes the coins on it,
+and can sign links that send your customers' payments elsewhere.
+
+- **Run the payee as its own process**, apart from your web application,
+  with only the keys it needs. Your web server asks it for payment
+  requests and reads order state; it does not hold the keys.
+- **Move received coins to cold storage** often, so the hot wallet holds
+  little.
+- **Back up the keys and the offline store.** A link names your peer ID,
+  so a lost libp2p key makes every link you shared dead. A payment sealed
+  to an offline key you have lost cannot be opened.
+- **Wait for a block before handing over goods of higher value.**
+  `onPayment` means checked by SPV and seen on the network: no
+  confirmation yet. The SPV check takes merkle roots from WhatsOnChain by
+  default; pass your own `chainTracker` (block headers you keep) to trust
+  no one for that.
+- **Answer the status endpoint only for the browser that placed the
+  order** (its session). A status carries the order's state and txid.
+- **Publish your domain file** (`/.well-known/spiffyvault.json`, see
+  [Links that name a website](#links-that-name-a-website)) and put `d`
+  in your links, signed. `createPaymentRequest` signs every live link it
+  makes.
+- **Pin versions and run `npm audit`** on every upgrade.
+- **Mainnet:** not yet. See `SECURITY.md`.
+
 ## Troubleshooting
 
 | What you see | Why | What to do |
@@ -822,6 +937,11 @@ did.
 | BSVA's message box | `https://messagebox.bsvblockchain.tech` (`DEFAULT_MESSAGE_BOX_HOST`), the one the app reads | PeerPay: carrying the payment token to the payee | See who pays whom. Drop the token, so the payee never learns of the payment | Your wallet broadcasts before the token is sent, so a payment can be on the network with its token not delivered: `PeerPayUndeliveredError`. Send the token again with `deliverPeerPayToken()`; do not pay again | `peerPay.host`, but the app reads only BSVA's |
 | The payee's website | The link's `d` | The domain check: `https://<d>/.well-known/spiffyvault.json` | Whoever runs the domain can list any payee. The check proves the domain names the payee, not that the payer meant that domain | `pay()` refuses the link with `DomainError` before anything is asked of the payee | `domainFetch` |
 | Your wallet | The one you pass | Funding, broadcasting PeerPay payments, and reclaiming offline payments the payee never collects | Whatever its own services do (the wallet toolbox uses WhatsOnChain and ARC) | No payment can be built | Your choice |
+
+The app finds a payee only through SpiffyVault's Ricochet server, so
+there is no running your own for payments from the app yet: live and
+offline payments depend on that one server being up. PeerPay does not use
+it.
 
 ARC is retired on 30 November 2026, so the payee broadcasts to
 [Arcade](https://github.com/bsv-blockchain/broadcaster), which serves the

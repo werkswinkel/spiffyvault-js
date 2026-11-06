@@ -44,9 +44,16 @@ The user is the key: `publicKey` (64 hex characters) is the same each time
 this SpiffyVault identity signs in to `domain`, and different at every
 other site.
 
-`SignInSite` keeps pending sign-ins in memory. With more than one server
-process, pass a `store` that implements `SignInStore` over your shared
-store.
+`SignInSite` keeps pending sign-ins in memory (`MemoryStore`), which holds
+for one server process only. With more than one, pass a `store` that
+implements `SignInStore` over your shared store, and know what it does not
+give you: `SignInSite` reads an entry, decides, then writes it back, in
+separate calls. Two processes answering for the same sign-in at the same
+moment can both read it before either writes. Then one attempt per
+challenge, and one use per return token, no longer hold. Until
+`SignInStore` has an atomic take, send every request for one sign-in to
+the same process (route `/sign-in/*` by the `nonce` or `t` parameter, or
+use sticky sessions).
 
 ## In the page
 

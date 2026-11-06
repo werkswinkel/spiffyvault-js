@@ -10,12 +10,12 @@ import { anchorRecordJson } from '../../src/internal.ts'
 import { PaymentError } from '@spiffyvault/payments'
 import { fundWithFunder } from '@spiffyvault/payments/internal'
 import { handle, makeFunder, payeeLine, perPath, readLink, shopFile, signedLink } from '../../examples/parts.ts'
-import { paymentFor, statusOf } from '../../examples/widget.ts'
+import { orderPaid, paymentFor, screenOrder, statusOf } from '../../examples/widget.ts'
 import { startOfflinePayee } from '../../examples/offline-payee.ts'
 import { startPeerPayPayee } from '../../examples/peerpay-payee.ts'
 import { payOffline, payViaPeerPay } from '../../src/index.ts'
 import type { OfflinePayeeState } from '../../src/index.ts'
-import type { Order } from '../../examples/widget.ts'
+import type { Order, Orders } from '../../examples/widget.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { anchorKey, fill, identityFromSeed, publishSessionKeys, signAnchorRecord } from '../support/payee.ts'
@@ -79,6 +79,24 @@ test('README: a payment request for an order, and its status', async () => {
   assert.ok(request.links.live !== undefined && request.links.peerpay !== undefined)
   assert.deepEqual(statusOf(order), { id: '1042', step: 'shown' })
   assert.deepEqual(statusOf({ ...order, paidTxid: 'ab' }), { id: '1042', step: 'paid', path: 'live', txid: 'ab' })
+})
+
+test('README: matching requests and payments to orders', () => {
+  const order: Order = { id: '1042', totalSats: 37_000, ref: 'K7Q2M9XD' }
+  const orders: Orders = new Map([['K7Q2M9XD', order]])
+  const ask = (amountSats: number, note?: string) => ({ invoiceId: 'i', amountSats, payerPeerId: 'p', ...(note !== undefined ? { note } : {}) })
+  assert.equal(screenOrder(orders, ask(37_000, 'Order 1042 ref K7Q2M9XD')), undefined)
+  assert.ok(screenOrder(orders, ask(1, 'ref K7Q2M9XD')) !== undefined, 'a request for less than the order is refused')
+  assert.ok(screenOrder(orders, ask(37_000)) !== undefined, 'a request without a ref is refused')
+  assert.ok(screenOrder(orders, ask(37_000, 'ref AAAAAAAA')) !== undefined, 'an unknown ref is refused')
+
+  assert.equal(orderPaid(orders, { txid: 'aa', note: 'ref K7Q2M9XD', paidSats: 1 }), false, 'too little')
+  assert.equal(order.paidTxid, undefined)
+  assert.equal(orderPaid(orders, { txid: 'bb', note: 'ref K7Q2M9XD', paidSats: 37_000 }), true)
+  assert.equal(orderPaid(orders, { txid: 'bb', note: 'ref K7Q2M9XD', paidSats: 37_000 }), true, 'the same payment twice')
+  assert.equal(orderPaid(orders, { txid: 'cc', note: 'ref K7Q2M9XD', paidSats: 37_000 }), false, 'a second payment')
+  assert.equal(order.paidTxid, 'bb')
+  assert.ok(screenOrder(orders, ask(37_000, 'ref K7Q2M9XD')) !== undefined, 'a paid order is refused')
 })
 
 test('README: being paid offline, the payment taken into the wallet as a BRC-29 payment', async () => {
