@@ -15,6 +15,9 @@ export {
 } from './link.ts'
 export type { PaymentLink, ParsedPaymentKey } from './link.ts'
 
+export { createPaymentRequest, newRequestRef, DEFAULT_REQUEST_TTL_MS } from './request.ts'
+export type { PaymentRequest, RequestStatus, RequestStep, RequestPayee, CreateRequestParams } from './request.ts'
+
 export { canonicalNetwork, parseNetwork, assertNetwork, linkNetwork, SPIFFYVAULT_RICOCHET, DEFAULT_MESSAGE_BOX_HOST } from './networks.ts'
 export type { Network, WalletNetworkType } from './networks.ts'
 

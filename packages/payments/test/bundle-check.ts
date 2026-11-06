@@ -50,5 +50,24 @@ const node = await build({
 })
 console.log(`node: platform=node, ${Object.keys(node.metafile.inputs).length} inputs, ${(node.outputFiles[0]!.contents.length / 1024).toFixed(0)} KiB`)
 
+// The widget goes on a shop's checkout page: no libp2p, no wallet, small.
+const widget = await build({
+  entryPoints: [`${root}dist/widget.js`],
+  bundle: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  write: false,
+  metafile: true,
+  minify: true,
+  logLevel: 'silent'
+})
+const widgetInputs = Object.keys(widget.metafile.inputs)
+const widgetKiB = widget.outputFiles[0]!.contents.length / 1024
+console.log(`widget: platform=browser, minified, ${widgetInputs.length} inputs, ${widgetKiB.toFixed(0)} KiB`)
+const heavy = widgetInputs.filter(p => /libp2p|@bsv\/|@go-ricochet|@noble|@chainsafe/.test(p))
+if (heavy.length > 0) { console.log(`  FAIL: widget pulls in ${heavy.slice(0, 5).join(', ')}`); failed = true }
+if (widgetKiB > 64) { console.log('  FAIL: widget over 64 KiB'); failed = true }
+
 if (failed) process.exit(1)
 console.log('bundle check passed')

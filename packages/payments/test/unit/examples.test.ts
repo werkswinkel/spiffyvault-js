@@ -10,6 +10,8 @@ import { anchorRecordJson } from '../../src/internal.ts'
 import { PaymentError } from '@spiffyvault/payments'
 import { fundWithFunder } from '@spiffyvault/payments/internal'
 import { handle, makeFunder, payeeLine, perPath, readLink, shopFile, signedLink } from '../../examples/parts.ts'
+import { paymentFor, statusOf } from '../../examples/widget.ts'
+import type { Order } from '../../examples/widget.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
 import { anchorKey, fill, identityFromSeed, publishSessionKeys, signAnchorRecord } from '../support/payee.ts'
@@ -61,4 +63,16 @@ test('the signed link example', async () => {
   const { text, valid } = await signedLink(shop.libp2pKey, shop.peerId)
   assert.equal(valid, true)
   assert.match(text, /&s=[A-Za-z0-9_-]{86}$/)
+})
+
+test('README: a payment request for an order, and its status', async () => {
+  const id = await identityFromSeed(fill(9))
+  const key = PrivateKey.fromRandom().toPublicKey().toString()
+  const order: Order = { id: '1042', totalSats: 37_000 }
+  const request = await paymentFor(order, { peerId: id.peerId, paymentKey: key, privateKey: id.libp2pKey })
+  assert.equal(request.id, '1042')
+  assert.equal(request.amountSats, 37_000)
+  assert.ok(request.links.live !== undefined && request.links.peerpay !== undefined)
+  assert.deepEqual(statusOf(order), { id: '1042', step: 'shown' })
+  assert.deepEqual(statusOf({ ...order, paidTxid: 'ab' }), { id: '1042', step: 'paid', path: 'live', txid: 'ab' })
 })

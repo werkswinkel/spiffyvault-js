@@ -27,10 +27,11 @@ Node.js 22.18 or later. ESM only. A beta for review: testnet only for now
 |---|---|---|
 | `@spiffyvault/payments/browser` | Browsers | `createPaymentNode()`: WebSockets and the circuit relay transport |
 | `@spiffyvault/payments/node` | Node.js, Electron main | `createPaymentNode()`: UDX, WebSockets and the circuit relay transport; `resolveDnsAddrs()` |
+| `@spiffyvault/payments/widget` | A shop's checkout page | `mountPayment()`: the payment widget. No libp2p and no wallet; 22 KiB minified |
 | `@spiffyvault/payments` (core) | Any, with your own libp2p node | Nothing platform-specific |
 | `@spiffyvault/payments/internal` | Tests, tools, wallets that need one step on its own | The parts the rest is built from: peer-session bundles and sealing, payment frames, anchor records, BEEF handling, bytes. **Unstable**: any of it may change in any release, a patch release too |
 
-Only the first three are the public API; a release keeps them working or
+Only the first four are the public API; a release keeps them working or
 says what changed.
 
 The package uses `@go-ricochet/ricochet` for the Ricochet server (offline
@@ -564,6 +565,117 @@ with it; without one it reports that no BRC-100 identity was found. To set
 it up: avatar, **Identity & keys**, **BRC-100 payment key**, **Set up**. An
 app that is to be paid by PeerPay needs the key too.
 
+
+## A payment widget for your checkout
+
+`mountPayment()` puts the whole payment step into one element on your
+checkout page: the QR code, the button that opens the app on a phone, the
+other ways to pay, the progress, expiry and a new link, and the paid view.
+Your server makes the request; the widget only shows its links and asks
+your server how it is going. It has no libp2p and no wallet in it.
+
+On your server, the payee (a node running `acceptLivePayments`) makes a
+request for each order:
+
+<!-- example: examples/widget.ts#widget-server-imports -->
+```ts
+import { createPaymentRequest } from '@spiffyvault/payments'
+import type { PaymentRequest, RequestStatus } from '@spiffyvault/payments'
+```
+<!-- /example -->
+
+<!-- example: examples/widget.ts#widget-server -->
+```ts
+// The payee's links for this order: live, signed with its peer key, and PeerPay.
+const request = await createPaymentRequest(
+  { network: 'testnet', peerId: payee.peerId, paymentKey: payee.paymentKey, signer: payee.privateKey, domain: 'shop.example' },
+  { id: order.id, amountSats: order.totalSats, memo: `Order ${order.id}` }
+)
+// Keep request.ref with the order: the payer's note carries it ("ref K7Q2M9XD"),
+// so refInNote() matches a payment that arrives late, or by PeerPay, to the order.
+```
+<!-- /example -->
+
+Pass the request to your page as JSON. While it is open, your server
+answers the widget with a `RequestStatus`:
+
+<!-- example: examples/widget.ts#widget-status -->
+```ts
+// Your payee's onPayment marks the order paid; until then the link is still shown.
+return order.paidTxid !== undefined
+  ? { id: order.id, step: 'paid', path: 'live', txid: order.paidTxid }
+  : { id: order.id, step: 'shown' }
+```
+<!-- /example -->
+
+On the page:
+
+<!-- example: examples/widget.ts#widget-page-imports -->
+```ts
+import { mountPayment } from '@spiffyvault/payments/widget'
+```
+<!-- /example -->
+
+<!-- example: examples/widget.ts#widget-page -->
+```ts
+const json = async (res: Response): Promise<any> => {
+  if (!res.ok) throw new Error(`shop answered ${res.status}`)
+  return await res.json()
+}
+const stop = mountPayment(document.getElementById('pay')!, {
+  // A new request, or a fresh one when the payer asks again after it expired.
+  request: async () => await json(await fetch(`/orders/${orderId}/payment`, { method: 'POST' })),
+  status: async id => await json(await fetch(`/orders/${id}/payment`)),
+  onPaid: () => { location.assign(`/orders/${orderId}/thanks`) },
+  accent: '#0b6e4f'
+})
+```
+<!-- /example -->
+
+What the payer sees:
+
+- **On a computer**: the QR code with the amount, the other ways to pay open
+  under it (open the app on this computer, PeerPay from any BRC-100 wallet,
+  copy the link), and the progress beside it.
+- **On a phone**: a **Pay with SpiffyVault** button that opens the app,
+  with **Pay another way** folded under it (the QR code for another device,
+  PeerPay, copy the link), then the progress.
+
+The steps a status can report:
+
+| `step` | Shown as |
+|---|---|
+| `shown` | The link is shown, with the time left |
+| `phone-connected` | The payer's app has the invoice |
+| `checking` | The payee has the payment and is checking it |
+| `on-the-way` | Broadcast; with `path: 'peerpay'`, a note says the shop collects it |
+| `in-mailbox` | Left in the payee's mailbox while it was away |
+| `paid` | The paid view, with a link to the transaction; `onPaid` is called once and polling stops |
+| `refused` | Why (`reason`), that nothing was taken, and to try again; the request stays open |
+| `expired` | A **Make a new link** button, which calls `request(previous)` |
+
+Set `payeeOnline: false` on the request or a status while the payee can't
+take live payments: the widget says the payment will wait for it, and the
+app pays by mailbox or PeerPay.
+
+Options:
+
+- `pollEvery`: milliseconds between status questions, 2000 by default. Pass
+  `subscribe(id, onStatus)` to push changes instead (Server-Sent Events,
+  a WebSocket); polling then slows to every 15 s as a fallback. The widget
+  also asks at once when the page comes back into view.
+- `accent`: your colour for the main button and the current step. The
+  widget adds one stylesheet (`<style id="spiffyvault-pay-styles">`) and
+  takes its font and text colour from your page. Pass `styles: false` to
+  style the `spiffyvault-pay-*` classes yourself.
+- `labels`: any of the words the widget shows, for your language
+  (`englishPaymentLabels` has them all).
+- `onEvent`: each request, status, choice and error, for logging or a
+  developer view.
+- `device`: `'phone'` or `'computer'`, when you know better than the
+  browser's user agent.
+
+`mountPayment` returns a function that stops the widget and removes it.
 
 ## Troubleshooting
 
