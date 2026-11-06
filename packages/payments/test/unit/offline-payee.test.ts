@@ -99,8 +99,10 @@ test('collects a payment: opened, broadcast, kept, then the message deleted; the
   const payee = await w.start()
   const r = await w.pay(2500, 'Order 1042 · ref K7Q2M9XD')
   assert.equal(r.status, 'handed-off')
+  const before = Date.now()
   await payee.collectNow()
   payee.stop()
+  assert.ok(payee.checkedAt !== undefined && payee.checkedAt >= before)
   assert.equal(w.paid.length, 1)
   const p = w.paid[0]!
   assert.equal(p.txid, r.txid)

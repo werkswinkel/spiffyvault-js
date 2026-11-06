@@ -155,6 +155,8 @@ export interface OfflinePayeeOptions {
 }
 
 export interface OfflinePayee {
+  /** Unix ms of the last mailbox check that reached the server; undefined before the first. */
+  readonly checkedAt: number | undefined
   /** Checks the mailbox now. */
   collectNow: () => Promise<void>
   /** Runs a keys pass now. */
@@ -418,10 +420,12 @@ export async function acceptOfflinePayments (opts: OfflinePayeeOptions): Promise
     event({ kind: 'paid', payment: settled })
   }
 
+  let checkedAt: number | undefined
   const collectPass = async (): Promise<void> => {
     let fromSequence: number | undefined
     for (;;) {
       const page = await opts.ricochet.retrievePage({ folderPath: folders.offline, maxMessages: 50, ...(fromSequence !== undefined ? { fromSequence } : {}) })
+      checkedAt = now()
       for (const msg of page.messages) {
         const id = msg.messageId
         if (state.done.includes(id)) {
@@ -499,6 +503,7 @@ export async function acceptOfflinePayments (opts: OfflinePayeeOptions): Promise
   const collectTimer = setInterval(() => { if (!stopped) void collectNow() }, opts.collectEveryMs ?? 30_000)
   const keysTimer = setInterval(() => { if (!stopped) void refreshKeys() }, opts.keysEveryMs ?? 3600_000)
   return {
+    get checkedAt () { return checkedAt },
     collectNow,
     refreshKeys,
     stop: () => {
