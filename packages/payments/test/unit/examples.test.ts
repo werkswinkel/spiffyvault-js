@@ -12,7 +12,8 @@ import { fundWithFunder } from '@spiffyvault/payments/internal'
 import { handle, makeFunder, payeeLine, perPath, readLink, shopFile, signedLink } from '../../examples/parts.ts'
 import { paymentFor, statusOf } from '../../examples/widget.ts'
 import { startOfflinePayee } from '../../examples/offline-payee.ts'
-import { payOffline } from '../../src/index.ts'
+import { startPeerPayPayee } from '../../examples/peerpay-payee.ts'
+import { payOffline, payViaPeerPay } from '../../src/index.ts'
 import type { OfflinePayeeState } from '../../src/index.ts'
 import type { Order } from '../../examples/widget.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
@@ -98,4 +99,32 @@ test('README: being paid offline, the payment taken into the wallet as a BRC-29 
   const args = taken[0] as { outputs: Array<{ protocol: string }>, tx: number[] }
   assert.equal(args.outputs[0]!.protocol, 'wallet payment')
   assert.equal(Transaction.fromAtomicBEEF(args.tx).id('hex'), r.txid)
+})
+
+test('README: being paid by PeerPay, the payment taken into the wallet as a BRC-29 payment', async () => {
+  const root = PrivateKey.fromRandom()
+  const taken: unknown[] = []
+  const wallet = Object.assign(new ProtoWallet(root), { internalizeAction: async (args: unknown) => { taken.push(args); return { accepted: true } } }) as unknown as WalletInterface
+  const payer = new FakeWallet()
+  const messages: Array<{ messageId: string, sender: string, body: unknown }> = []
+  const client = {
+    listMessagesLite: async () => messages.slice(),
+    acknowledgeMessage: async ({ messageIds }: { messageIds: string[] }) => { messages.splice(0, messages.length, ...messages.filter(m => !messageIds.includes(m.messageId))) }
+  }
+  const sender = (await payer.getPublicKey({ identityKey: true })).publicKey
+  const r = await payViaPeerPay({ paymentKey: root.toPublicKey().toString(), amountSats: 1500 }, {
+    wallet: payer as unknown as WalletInterface,
+    client: { sendMessage: async m => { messages.push({ messageId: 'm1', sender, body: JSON.parse(m.body) }); return {} } }
+  })
+  const payee = await startPeerPayPayee(wallet, {
+    client, chainTracker: { isValidRootForHeight: async () => true, currentHeight: async () => 1_000_000 }, broadcaster: async () => ({ accepted: true })
+  })
+  await payee.collectNow()
+  payee.stop()
+  assert.equal(taken.length, 1)
+  const args = taken[0] as { outputs: Array<{ protocol: string, paymentRemittance: { senderIdentityKey: string } }>, tx: number[] }
+  assert.equal(args.outputs[0]!.protocol, 'wallet payment')
+  assert.equal(args.outputs[0]!.paymentRemittance.senderIdentityKey, sender)
+  assert.equal(Transaction.fromAtomicBEEF(args.tx).id('hex'), r.txid)
+  assert.equal(messages.length, 0)
 })

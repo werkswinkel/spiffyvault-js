@@ -1,8 +1,8 @@
 # @spiffyvault/payments
 
 Pay a SpiffyVault user from a web app, a JavaScript or Electron wallet, or
-a Node.js service, and be paid live by one ([Being paid](#being-paid)). The
-bytes on the wire are the same as the SpiffyVault app's, on all three of
+a Node.js service, and be paid by one on all three paths ([Being
+paid](#being-paid)). The bytes on the wire are the same as the SpiffyVault app's, on all three of
 its payment paths:
 
 | Path | How | Who broadcasts |
@@ -433,9 +433,12 @@ try {
 
 ## Being paid
 
-A node can be paid live the way a phone is: the app pays its peer ID
-through the Ricochet server's circuit relay, and the payment arrives as it
-happens.
+A node can be paid the way a phone is, on each path:
+`acceptLivePayments()` (below), `acceptPeerPayPayments()` ([Being paid by
+PeerPay](#being-paid-by-peerpay)) and `acceptOfflinePayments()` ([Being
+paid while you are away](#being-paid-while-you-are-away-offline)). Live
+first: the app pays the node's peer ID through the Ricochet server's
+circuit relay, and the payment arrives as it happens.
 
 <!-- example: examples/payee.ts#payee-imports -->
 ```ts
@@ -541,23 +544,68 @@ SPV and is seen on the network. For goods of lower value, that is enough.
 For goods of higher value, wait for a confirmation: watch `payment.txid`
 until it is in a block (for example on WhatsOnChain), then hand them over.
 
-### Receiving PeerPay without a BRC-100 wallet
+### Being paid by PeerPay
 
-The library sends PeerPay but does not receive it. The browser wallet above
-reads its own inbox with `@bsv/message-box-client`:
+A BRC-100 wallet pays your wallet's identity key by PeerPay: it broadcasts
+the payment and leaves a token in your `payment_inbox` on a message box
+server. `acceptPeerPayPayments()` reads that inbox, as the app does:
 
-- `ProtoWallet` from `@bsv/sdk`, made from the identity key, is enough for
-  the server's BRC-103 authentication and for decrypting messages.
-- Read with `listMessagesLite({ messageBox: PEERPAY_MESSAGE_BOX, host })`
-  and pass the host every time (`DEFAULT_MESSAGE_BOX_HOST`, or the one you
-  chose). `listMessages` tries to take payments in with
-  `internalizeAction`, which a `ProtoWallet` cannot do.
-- The coin's key is BRC-29: protocol `BRC29_PROTOCOL_ID`, key ID
-  `<derivationPrefix> <derivationSuffix>`, counterparty the sender's
-  identity key. Check that the output at `outputIndex` (default 0) pays
-  that key the token's amount, and check the transaction by SPV.
-- Acknowledge a message (`acknowledgeMessage`) only once the coin is kept:
-  acknowledging deletes it from the server.
+- **Checking.** Every 10 seconds it lists the inbox. For each token it
+  checks that the output the token names pays your wallet's BRC-29 key
+  (counterparty: the sender's identity key) exactly the amount the token
+  says, checks the transaction by SPV, and sends it to the network once
+  more to learn that the network has it. Then it calls `onPayment`.
+- **Acknowledging.** Only after `onPayment` returns is the message
+  acknowledged, which deletes it from the server.
+- **The wallet.** It needs no `internalizeAction` for this: a `ProtoWallet`
+  from `@bsv/sdk`, made from the identity key, signs in to the server
+  (BRC-103) and opens the messages. Take the payment in wherever you keep
+  coins.
+
+<!-- example: examples/peerpay-payee.ts#peerpay-payee-imports -->
+```ts
+import { acceptPeerPayPayments } from '@spiffyvault/payments'
+```
+<!-- /example -->
+
+<!-- example: examples/peerpay-payee.ts#peerpay-payee -->
+```ts
+const payee = await acceptPeerPayPayments({
+  network: 'testnet',
+  wallet, // its identity key is the payment key payers pay; it signs in to the message box
+  onPayment: async p => {
+    // On the network now. Take it in; if this throws, the message stays and is offered again.
+    await wallet.internalizeAction({
+      tx: Array.from(p.atomicBeef),
+      outputs: p.outputs.map(o => ({
+        outputIndex: o.outputIndex,
+        protocol: 'wallet payment',
+        paymentRemittance: { derivationPrefix: o.derivationPrefix, derivationSuffix: o.derivationSuffix, senderIdentityKey: o.senderIdentityKey }
+      })),
+      description: 'PeerPay payment'
+    })
+  },
+  onEvent: e => { console.log(`PeerPay payee: ${e.kind}${e.kind === 'error' ? ` (${e.error})` : ''}`) },
+  ...checks // the tests use a stand-in inbox, chain and broadcaster; the defaults are BSVA's message box, WhatsOnChain and Arcade
+})
+```
+<!-- /example -->
+
+- **The host.** The default is BSVA's `https://messagebox.bsvblockchain.tech`
+  (`DEFAULT_MESSAGE_BOX_HOST`), the one the app sends to. Pass `host` for
+  another; a wallet that sends elsewhere needs you to read there.
+- **What happens when something fails.** A step that may work later (the
+  inbox, the chain or the broadcaster could not be reached, the wallet
+  could not open a message) is tried again on the next pass; after
+  `giveUpMs` (one hour) the message is deleted with a `refused` or
+  `not-broadcast` event. A message that is not a payment token, or does
+  not pay your wallet, is deleted at once with a `refused` event. A
+  payment on the network is never dropped: if `onPayment` keeps failing,
+  it is offered again every pass.
+- **Keep payments by txid.** If acknowledging fails after `onPayment`, the
+  payee acknowledges on the next pass without calling `onPayment` again,
+  but only while it runs: after a restart, the same payment can come to
+  `onPayment` a second time.
 
 The app pays a link that has only `k` by PeerPay. The paying app needs its
 own BRC-100 payment key for that, because it signs in to the message box
@@ -756,7 +804,7 @@ Options:
 | Dialling `<relay udx address>/p2p-circuit/p2p/<payee>` fails with "no valid addresses" | js-libp2p's circuit transport does not know `/udx` | Dial the relay, then `/p2p/<relay>/p2p-circuit/p2p/<payee>` (`payLive` does this) |
 | A wallet you just funded says WhatsOnChain has no transaction | Indexer lag (see [Funding](#funding)) | Retry for some seconds |
 | A mailbox payment is collected but never reaches the network | Its coins were spent again before the payee broadcast it (see [Funding](#funding)) | Hold inputs until `abort()`; one payment at a time |
-| The app will not pay a link with only `k`: no BRC-100 identity found | The paying app has no BRC-100 payment key | Set it up in the app ([Receiving PeerPay](#receiving-peerpay-without-a-brc-100-wallet)) |
+| The app will not pay a link with only `k`: no BRC-100 identity found | The paying app has no BRC-100 payment key | Set it up in the app ([Being paid by PeerPay](#being-paid-by-peerpay)) |
 | `identify` or the reservation fails in a browser with "Protocol 768 was unknown" | The `/udx` multiaddr codec is not registered | Import from `@spiffyvault/payments/browser`, which registers it, or `import '@go-ricochet/libp2p-udx/multiaddr'` first |
 
 ## What you trust

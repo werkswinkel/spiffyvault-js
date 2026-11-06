@@ -80,11 +80,11 @@ export interface OfflinePayeeStore {
 export type PayeeRicochet = Pick<RicochetClient, 'peerId' | 'retrievePage' | 'deleteMessages' | 'sendMessage' | 'createMailbox' | 'getMailboxInfo' | 'getDocument' | 'putDocument'>
 
 /** One output paying this wallet, as a BRC-29 payment remittance (internalizeAction's paymentRemittance). */
-export interface OfflineOutput {
+export interface ReceivedOutput {
   outputIndex: number
   derivationPrefix: string
   derivationSuffix: string
-  /** The payer's single-use key for this output: the counterparty. */
+  /** The counterparty of the output's key: the payer's single-use key (offline) or identity key (PeerPay). */
   senderIdentityKey: string
 }
 
@@ -100,7 +100,7 @@ export interface ReceivedOfflinePayment {
   /** The payment as BEEF V1, ancestors included. */
   beefV1: Uint8Array
   transaction: Transaction
-  outputs: OfflineOutput[]
+  outputs: ReceivedOutput[]
   paidSats: number
   /** What the payer said it pays. */
   amountSats: number
@@ -328,8 +328,8 @@ export async function acceptOfflinePayments (opts: OfflinePayeeOptions): Promise
   }
 
   /** The outputs of `tx` that pay this wallet, from the message's derivations. */
-  const ourOutputs = async (tx: Transaction, m: OfflinePaymentMessage): Promise<OfflineOutput[]> => {
-    const byScript = new Map<string, Omit<OfflineOutput, 'outputIndex'>>()
+  const ourOutputs = async (tx: Transaction, m: OfflinePaymentMessage): Promise<ReceivedOutput[]> => {
+    const byScript = new Map<string, Omit<ReceivedOutput, 'outputIndex'>>()
     for (const d of m.type42Derivations) {
       if (d.anchorPublicKey.toLowerCase() !== anchorKey.toLowerCase()) continue
       const match = /^2-3241645161d8-(\S+) (\S+)$/.exec(d.invoiceNumber)
@@ -338,7 +338,7 @@ export async function acceptOfflinePayments (opts: OfflinePayeeOptions): Promise
       const { publicKey } = await opts.wallet.getPublicKey({ protocolID: BRC29_PROTOCOL_ID, keyID: `${derivationPrefix} ${derivationSuffix}`, counterparty: d.senderPublicKey, forSelf: true })
       byScript.set(p2pkhScriptForKey(publicKey), { derivationPrefix, derivationSuffix, senderIdentityKey: d.senderPublicKey })
     }
-    const outputs: OfflineOutput[] = []
+    const outputs: ReceivedOutput[] = []
     tx.outputs.forEach((o, outputIndex) => {
       const r = byScript.get(o.lockingScript.toHex())
       if (r !== undefined) outputs.push({ outputIndex, ...r })

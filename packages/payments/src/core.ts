@@ -35,10 +35,12 @@ export type {
 export type { PaymentResult, PaymentStatus, PaymentProgress, FundingContext } from './types.ts'
 export type { Funder, FundInfo, FundedPayment, PaymentOutput } from './funding.ts'
 
-// Receiving PeerPay with your own message box client (README, "Receiving PeerPay").
+// PeerPay: paying, and being paid (README, "Being paid by PeerPay").
 export { BRC29_PROTOCOL_ID } from './destination.ts'
 export { payViaPeerPay, deliverPeerPayToken, PeerPayUndeliveredError, PEERPAY_MESSAGE_BOX } from './peerpay.ts'
 export type { PeerPayParams, PeerPayContext, PeerPayToken, MessageBoxSender } from './peerpay.ts'
+export { acceptPeerPayPayments } from './peerpay-payee.ts'
+export type { PeerPayPayee, PeerPayPayeeOptions, PeerPayPayeeEvent, PeerPayPayeeWallet, PeerPayInbox, PeerPayInboxMessage, ReceivedPeerPayment } from './peerpay-payee.ts'
 
 export { isPeerId } from './peer.ts'
 export type { RicochetLike } from './ricochet.ts'
@@ -46,7 +48,7 @@ export type { RicochetLike } from './ricochet.ts'
 export { payOffline, OFFLINE_RECLAIM_SECONDS } from './offline.ts'
 export type { OfflinePayParams, OfflinePayContext } from './offline.ts'
 export { acceptOfflinePayments, OFFLINE_PAYEE_KEYS } from './offline-payee.ts'
-export type { OfflinePayee, OfflinePayeeOptions, OfflinePayeeEvent, OfflinePayeeState, OfflinePayeeStore, ReceivedOfflinePayment, OfflineOutput, PayeeRicochet } from './offline-payee.ts'
+export type { OfflinePayee, OfflinePayeeOptions, OfflinePayeeEvent, OfflinePayeeState, OfflinePayeeStore, ReceivedOfflinePayment, ReceivedOutput, PayeeRicochet } from './offline-payee.ts'
 
 export { payLive } from './live/live.ts'
 export type { LivePayParams, LivePayContext, LiveTimeouts } from './live/live.ts'
