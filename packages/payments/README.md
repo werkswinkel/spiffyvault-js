@@ -566,6 +566,73 @@ it up: avatar, **Identity & keys**, **BRC-100 payment key**, **Set up**. An
 app that is to be paid by PeerPay needs the key too.
 
 
+### Being paid while you are away (offline)
+
+When the app cannot reach a payee live, it can leave the payment in the
+payee's Ricochet mailbox: the transaction, not broadcast, sealed as the
+first message of a new session. `acceptOfflinePayments()` does the payee's
+side, as the app does it:
+
+- **Keys.** It publishes what a payer needs: a signed pre-key bundle (a new
+  signed pre-key every 7 days), a claim mailbox of signed one-time pre-keys
+  (topped up to 50 once fewer than 25 are left), and an anchor record
+  signed with the node's key. The anchor is the wallet's identity key, and
+  the payer pays BRC-29 keys under it, so the wallet takes the coins in as
+  it takes a PeerPay payment. It checks these every hour.
+- **Collecting.** Every 30 seconds it reads `wallet/offline-payments`.
+  Opening a message uses up its one-time pre-key, so what it says is saved
+  in your store at once. Then the payee checks it (the sender, the outputs
+  that pay your wallet, SPV), broadcasts it, and calls `onPayment` once the
+  network has it. Only then is the message deleted.
+
+<!-- example: examples/offline-payee.ts#offline-payee-imports -->
+```ts
+import { acceptOfflinePayments } from '@spiffyvault/payments'
+```
+<!-- /example -->
+
+<!-- example: examples/offline-payee.ts#offline-payee -->
+```ts
+const payee = await acceptOfflinePayments({
+  network: 'testnet',
+  ricochet, // a RicochetClient on the node that takes live payments, so payers find one peer ID
+  identityKey: privateKey, // that node's key: it signs the bundle, the one-time keys and the anchor record
+  wallet, // the payments go to this BRC-100 wallet; its identity key is the anchor
+  store, // keys and opened payments: offlinePayeeFileStore(path) in Node.js
+  onPayment: async p => {
+    // On the network now. Take it in; if this throws, the payment is offered again on the next pass.
+    await wallet.internalizeAction({
+      tx: p.transaction.toAtomicBEEF(),
+      outputs: p.outputs.map(o => ({
+        outputIndex: o.outputIndex,
+        protocol: 'wallet payment',
+        paymentRemittance: { derivationPrefix: o.derivationPrefix, derivationSuffix: o.derivationSuffix, senderIdentityKey: o.senderIdentityKey }
+      })),
+      description: 'Offline payment'
+    })
+  },
+  onEvent: e => { console.log(`offline payee: ${e.kind}${e.kind === 'error' ? ` (${e.error})` : ''}`) },
+  ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and Arcade
+})
+```
+<!-- /example -->
+
+- **The store holds private keys.** Keep it with your other keys
+  (`offlinePayeeFileStore` writes it readable by its owner only), and back
+  it up: a payment sealed to keys you have lost cannot be opened, and the
+  payer gets it back only after 3 days.
+- **Use one node for live and offline.** The payer looks up the bundle and
+  the anchor by the link's peer ID, so pass a RicochetClient on the node
+  that runs `acceptLivePayments`, and its key.
+- **What happens when something fails.** A step that may work later (the
+  chain or the broadcaster could not be reached, `onPayment` threw) is
+  tried again on the next pass, from what was saved. A payment that does
+  not open, pays nothing to your wallet, or still fails after `maxAttempts`
+  passes is deleted with a `refused` or `not-broadcast` event. Nothing was
+  received, and the payer's wallet reclaims it. A payment already on the
+  network is never dropped: if `onPayment` keeps failing, it is offered
+  again every pass.
+
 ## A payment widget for your checkout
 
 `mountPayment()` puts the whole payment step into one element on your

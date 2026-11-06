@@ -369,7 +369,7 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
       // received until then: a payment the network refuses pays nothing.
       reply(stream, { ...status, final: false })
       event({ kind: 'on-the-way', payment })
-      const outcome = await waitFor(sent.settled, networkWaitMs)
+      const outcome = await waitForNetwork(sent.settled, networkWaitMs)
       const settled = outcome.status !== undefined ? { ...payment, networkStatus: outcome.status } : payment
       if (outcome.kind === 'unknown') { event({ kind: 'unsettled', payment: settled }); return }
       if (outcome.kind === 'on-network') await keep(settled)
@@ -410,7 +410,7 @@ export async function acceptLivePayments (libp2p: Libp2p, options: LivePayeeOpti
 }
 
 /** [settled], or 'unknown' when it takes longer than [ms] or fails. */
-async function waitFor (settled: Promise<NetworkOutcome>, ms: number): Promise<NetworkOutcome> {
+export async function waitForNetwork (settled: Promise<NetworkOutcome>, ms: number): Promise<NetworkOutcome> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const late = new Promise<NetworkOutcome>(resolve => { timer = setTimeout(() => { resolve({ kind: 'unknown' }) }, ms) })
   try {

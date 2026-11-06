@@ -1,6 +1,6 @@
 /** An in-memory stand-in for a RicochetClient: documents and mailboxes, no network. */
 
-import type { RicochetLike } from '../../src/index.ts'
+import type { PayeeRicochet, RicochetLike } from '../../src/index.ts'
 
 export interface Stored {
   messageId: string
@@ -23,7 +23,7 @@ class Store {
   seq = 1
 }
 
-export class MemRicochet implements RicochetLike {
+export class MemRicochet implements RicochetLike, PayeeRicochet {
   readonly peerId: string
   private readonly store: Store
 
@@ -62,6 +62,27 @@ export class MemRicochet implements RicochetLike {
     if (i < 0) return null
     const [m] = this.store.mail.splice(i, 1)
     return { ...m } as never
+  }
+
+  async deleteMessages (...[ids]: Parameters<PayeeRicochet['deleteMessages']>): ReturnType<PayeeRicochet['deleteMessages']> {
+    const before = this.store.mail.length
+    for (const id of ids) {
+      const i = this.store.mail.findIndex(m => m.messageId === id && m.recipientPeerId === this.peerId)
+      if (i >= 0) this.store.mail.splice(i, 1)
+    }
+    return { deleted: before - this.store.mail.length } as never
+  }
+
+  async createMailbox (): Promise<void> {}
+
+  async getMailboxInfo (...[folderPath]: Parameters<PayeeRicochet['getMailboxInfo']>): ReturnType<PayeeRicochet['getMailboxInfo']> {
+    const messageCount = this.store.mail.filter(m => m.recipientPeerId === this.peerId && m.folderPath === folderPath).length
+    return { address: `${this.peerId}/${folderPath}`, type: 'private', messageCount, maxMessages: 0, retentionDays: 30, createdAt: 0, lastAccessedAt: 0 }
+  }
+
+  async putDocument (...[owner, path, content]: Parameters<PayeeRicochet['putDocument']>): ReturnType<PayeeRicochet['putDocument']> {
+    this.store.docs.set(`${owner.toString()}/${path}`, typeof content === 'string' ? new TextEncoder().encode(content) : Uint8Array.from(content as Uint8Array))
+    return {} as never
   }
 
   async sendMessage (...[recipient, payload, opts = {}]: Parameters<RicochetLike['sendMessage']>): ReturnType<RicochetLike['sendMessage']> {

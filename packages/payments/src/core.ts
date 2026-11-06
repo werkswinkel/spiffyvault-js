@@ -45,6 +45,8 @@ export type { RicochetLike } from './ricochet.ts'
 
 export { payOffline, OFFLINE_RECLAIM_SECONDS } from './offline.ts'
 export type { OfflinePayParams, OfflinePayContext } from './offline.ts'
+export { acceptOfflinePayments, OFFLINE_PAYEE_KEYS } from './offline-payee.ts'
+export type { OfflinePayee, OfflinePayeeOptions, OfflinePayeeEvent, OfflinePayeeState, OfflinePayeeStore, ReceivedOfflinePayment, OfflineOutput, PayeeRicochet } from './offline-payee.ts'
 
 export { payLive } from './live/live.ts'
 export type { LivePayParams, LivePayContext, LiveTimeouts } from './live/live.ts'

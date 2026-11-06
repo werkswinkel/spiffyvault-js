@@ -2,7 +2,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PrivateKey } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet, Transaction } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
 import { formatPaymentLink } from '../../src/index.ts'
 import { anchorRecordJson } from '../../src/internal.ts'
@@ -11,6 +11,9 @@ import { PaymentError } from '@spiffyvault/payments'
 import { fundWithFunder } from '@spiffyvault/payments/internal'
 import { handle, makeFunder, payeeLine, perPath, readLink, shopFile, signedLink } from '../../examples/parts.ts'
 import { paymentFor, statusOf } from '../../examples/widget.ts'
+import { startOfflinePayee } from '../../examples/offline-payee.ts'
+import { payOffline } from '../../src/index.ts'
+import type { OfflinePayeeState } from '../../src/index.ts'
 import type { Order } from '../../examples/widget.ts'
 import { FakeWallet } from '../support/fake-wallet.ts'
 import { MemRicochet } from '../support/mem-ricochet.ts'
@@ -75,4 +78,24 @@ test('README: a payment request for an order, and its status', async () => {
   assert.ok(request.links.live !== undefined && request.links.peerpay !== undefined)
   assert.deepEqual(statusOf(order), { id: '1042', step: 'shown' })
   assert.deepEqual(statusOf({ ...order, paidTxid: 'ab' }), { id: '1042', step: 'paid', path: 'live', txid: 'ab' })
+})
+
+test('README: being paid offline, the payment taken into the wallet as a BRC-29 payment', async () => {
+  const shop = await identityFromSeed(randomBytes(32))
+  const server = new MemRicochet(shop.peerId)
+  const root = PrivateKey.fromRandom()
+  const taken: unknown[] = []
+  const wallet = Object.assign(new ProtoWallet(root), { internalizeAction: async (args: unknown) => { taken.push(args); return { accepted: true } } }) as unknown as WalletInterface
+  let saved: OfflinePayeeState | null = null
+  const payee = await startOfflinePayee(server, shop.libp2pKey, wallet, { load: async () => saved, save: async s => { saved = s } },
+    { chainTracker: { isValidRootForHeight: async () => true, currentHeight: async () => 1_000_000 }, broadcaster: async () => ({ accepted: true }) })
+  const payer = await identityFromSeed(fill(9))
+  const r = await payOffline({ payeePeerId: shop.peerId, amountSats: 1200, network: 'testnet' },
+    { wallet: new FakeWallet() as unknown as WalletInterface, ricochet: server.as(payer.peerId), identityKey: payer.seed })
+  await payee.collectNow()
+  payee.stop()
+  assert.equal(taken.length, 1)
+  const args = taken[0] as { outputs: Array<{ protocol: string }>, tx: number[] }
+  assert.equal(args.outputs[0]!.protocol, 'wallet payment')
+  assert.equal(Transaction.fromAtomicBEEF(args.tx).id('hex'), r.txid)
 })

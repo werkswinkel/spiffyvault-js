@@ -25,6 +25,7 @@ import { nodeDomainFetch } from './node-domain.ts'
 export { resolveDnsAddrs }
 export * from './core.ts'
 export { nodeDomainFetch, PrivateHostError } from './node-domain.ts'
+export { offlinePayeeFileStore } from './node-store.ts'
 
 // On a server the domain check connects only to public addresses.
 setDefaultDomainFetch(nodeDomainFetch)
