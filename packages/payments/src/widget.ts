@@ -188,7 +188,8 @@ function explorer (network: string, txid: string): string {
 }
 
 const STYLE_ID = 'spiffyvault-pay-styles'
-const CSS = `
+/** The widget's stylesheet. Under a CSP without inline styles, serve dist/widget.css (`@spiffyvault/payments/widget.css`) and pass `styles: false`. */
+export const paymentWidgetCss = `
 .spiffyvault-pay{--sv-accent:var(--spiffyvault-pay-accent,#1f6fd0);--sv-ok:#2d8a4e;--sv-warn:#b7791f;--sv-bad:#c0392b;--sv-line:color-mix(in srgb,currentColor 18%,transparent);--sv-soft:color-mix(in srgb,currentColor 62%,transparent);display:flex;flex-direction:column;gap:14px;font:inherit;color:inherit}
 .spiffyvault-pay *{box-sizing:border-box}
 .spiffyvault-pay [hidden]{display:none!important}
@@ -232,7 +233,7 @@ function addStyles (): void {
   if (document.getElementById(STYLE_ID) !== null) return
   const style = document.createElement('style')
   style.id = STYLE_ID
-  style.textContent = CSS
+  style.textContent = paymentWidgetCss
   document.head.append(style)
 }
 

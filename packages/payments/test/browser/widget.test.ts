@@ -7,6 +7,7 @@
 
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { chromium } from 'playwright'
@@ -189,6 +190,29 @@ test('README: the checkout page asks the shop over fetch and goes on when paid',
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.spiffyvault-pay')!).getPropertyValue('--spiffyvault-pay-accent').trim()), '#0b6e4f')
   paid = true
   await page.waitForURL('https://shop.example/orders/1042/thanks', { timeout: 10_000 })
+  await page.close()
+})
+
+test('under a CSP with no inline styles, widget.css styles it and nothing is refused', async () => {
+  const css = readFileSync(`${root}dist/widget.css`, 'utf8')
+  const page = await browser.newPage({ viewport: { width: 1100, height: 800 } })
+  const refused: string[] = []
+  page.on('console', m => { if (/Content Security Policy/i.test(m.text())) refused.push(m.text()) })
+  await page.route('https://strict.example/**', async route => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/widget.css') return await route.fulfill({ contentType: 'text/css', body: css })
+    if (path === '/widget.js') return await route.fulfill({ contentType: 'text/javascript', body: bundle + `\nSpiffyVaultWidget.mountPayment(document.getElementById('pay'), { styles: false, device: 'computer', request: async () => ({ id: '1', ref: 'K7Q2M9XD', network: 'testnet', amountSats: 37000, expiresAt: Date.now() + 600000, links: { live: ${JSON.stringify(LIVE)}, peerpay: ${JSON.stringify(PEERPAY)} } }), status: async id => ({ id, step: 'shown' }), onPaid: () => {} })` })
+    return await route.fulfill({
+      contentType: 'text/html',
+      headers: { 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" },
+      body: '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><div id="pay"></div><script src="/widget.js"></script>'
+    })
+  })
+  await page.goto('https://strict.example/checkout')
+  await page.waitForSelector('.spiffyvault-pay-qr svg')
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.spiffyvault-pay-grid')!).display), 'grid')
+  assert.equal(await page.locator('#spiffyvault-pay-styles').count(), 0)
+  assert.deepEqual(refused, [])
   await page.close()
 })
 

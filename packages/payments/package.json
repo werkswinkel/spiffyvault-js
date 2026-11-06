@@ -40,6 +40,7 @@
       "types": "./dist/widget.d.ts",
       "default": "./dist/widget.js"
     },
+    "./widget.css": "./dist/widget.css",
     "./core": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -70,7 +71,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json && node tools/widget-css.ts",
     "typecheck": "tsc -p tsconfig.json && npm run build && tsc -p tsconfig.test.json",
     "test": "npm run test:unit",
     "test:unit": "npm run build && node --test 'test/unit/**/*.test.ts'",

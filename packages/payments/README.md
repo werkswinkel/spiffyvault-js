@@ -667,7 +667,10 @@ Options:
 - `accent`: your colour for the main button and the current step. The
   widget adds one stylesheet (`<style id="spiffyvault-pay-styles">`) and
   takes its font and text colour from your page. Pass `styles: false` to
-  style the `spiffyvault-pay-*` classes yourself.
+  style the `spiffyvault-pay-*` classes yourself. If your Content Security
+  Policy refuses inline styles, serve `@spiffyvault/payments/widget.css`
+  (the same stylesheet, as a file) from your own site and pass
+  `styles: false`.
 - `labels`: any of the words the widget shows, for your language
   (`englishPaymentLabels` has them all).
 - `onEvent`: each request, status, choice and error, for logging or a
