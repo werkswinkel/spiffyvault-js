@@ -17,15 +17,15 @@ export async function till (addressFor: (invoiceId: string) => string, keep: (p:
   const { node, privateKey } = await createPaymentNode({ payee: true, ...(relay !== undefined ? { relay } : {}) })
   await waitUntilReachable(node)
   const payee = await acceptLivePayments(node, {
-    network: 'testnet',
+    network: 'mainnet',
     screen: r => refuse(r), // the payer sets the amount: refuse what does not match an open order
     invoiceAddress: r => addressFor(r.invoiceId), // a new address per invoice, one you can spend
     onPayment: p => { keep(p) }, // checked by SPV and seen on the network: keep the coin, then check the order
     onEvent: e => { console.log(`payee: ${e.kind}`) }, // 'keep-failed' and 'unsettled' carry a payment to keep or watch
-    ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and ARC
+    ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and Arcade
   })
   // The app pays this link live, and refuses it if anyone changes it.
-  const link = formatPaymentLink(await signPaymentLink({ network: 'testnet', peerId: node.peerId.toString(), amountSats: 2500 }, privateKey))
+  const link = formatPaymentLink(await signPaymentLink({ network: 'mainnet', peerId: node.peerId.toString(), amountSats: 2500 }, privateKey))
   // #endregion
   return { link, stop: async () => { await payee.stop(); await node.stop() } }
 }

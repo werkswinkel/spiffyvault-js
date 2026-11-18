@@ -31,11 +31,11 @@ test('README: reading a link', async () => {
 test('README: per-path calls', async () => {
   const id = await identityFromSeed(randomBytes(32))
   const server = new MemRicochet(id.peerId)
-  server.putDoc(id.peerId, 'wallet/payment-anchor', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchorKey().pub, epoch: 0, networkType: 'test', timestamp: 1, path: 'wallet/payment-anchor' })))
-  await publishSessionKeys(server.as(id.peerId), id, { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map() })
+  server.putDoc(id.peerId, 'wallet/payment-anchor/mainnet', anchorRecordJson(signAnchorRecord(id, { anchorPublicKey: anchorKey().pub, epoch: 0, networkType: 'main', timestamp: 1, path: 'wallet/payment-anchor/mainnet' })))
+  await publishSessionKeys(server.as(id.peerId), id, { signedPreKeyId: 1, signedPreKeyPrivate: randomBytes(32), oneTimePreKeys: new Map() }, 'mainnet')
   const sent: string[] = []
   const payer = await identityFromSeed(fill(4))
-  const out = await perPath(new FakeWallet({ coins: [10_000, 10_000] }) as unknown as WalletInterface, server.as(payer.peerId), payer.seed, id.peerId,
+  const out = await perPath(new FakeWallet({ coins: [10_000, 10_000], network: 'mainnet' }) as unknown as WalletInterface, server.as(payer.peerId), payer.seed, id.peerId,
     PrivateKey.fromRandom().toPublicKey().toString(), { sendMessage: async m => { sent.push(m.body); return {} } })
   assert.deepEqual(out, ['handed-off', 'delivered'])
   assert.equal(sent.length, 1)
@@ -109,8 +109,8 @@ test('README: being paid offline, the payment taken into the wallet as a BRC-29 
   const payee = await startOfflinePayee(server, shop.libp2pKey, wallet, { load: async () => saved, save: async s => { saved = s } },
     { chainTracker: { isValidRootForHeight: async () => true, currentHeight: async () => 1_000_000 }, broadcaster: async () => ({ accepted: true }) })
   const payer = await identityFromSeed(fill(9))
-  const r = await payOffline({ payeePeerId: shop.peerId, amountSats: 1200, network: 'testnet' },
-    { wallet: new FakeWallet() as unknown as WalletInterface, ricochet: server.as(payer.peerId), identityKey: payer.seed })
+  const r = await payOffline({ payeePeerId: shop.peerId, amountSats: 1200, network: 'mainnet' },
+    { wallet: new FakeWallet({ network: 'mainnet' }) as unknown as WalletInterface, ricochet: server.as(payer.peerId), identityKey: payer.seed })
   await payee.collectNow()
   payee.stop()
   assert.equal(taken.length, 1)

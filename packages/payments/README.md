@@ -20,8 +20,9 @@ is copied from `examples/`, and the tests run those files.
 npm install @spiffyvault/payments
 ```
 
-Node.js 22.18 or later. ESM only. A beta for review: testnet only for now
-(see SECURITY.md in the repository).
+Node.js 22.18 or later. ESM only. It runs on mainnet, as the SpiffyVault
+app in the stores does; use testnet while you build and test (see
+SECURITY.md in the repository).
 
 | Import | For | Adds |
 |---|---|---|
@@ -119,16 +120,16 @@ try {
 Before anything is asked of anyone, `pay()` checks the link (the app's
 rules exactly: `parsePaymentLink`), refuses a link or key for another
 network than the wallet's, refuses a bare BRC-100 key from a testnet wallet
-unless `allowBareKey` is set (keys outside links carry a `testnet:` or
-`regtest:` label off mainnet), takes the link's amount, and puts
-`ref <r>` into the note for a payment-request link.
+unless `allowBareKey` is set (a key shared from a test wallet carries a
+`testnet:` or `regtest:` label; a mainnet key has none), takes the link's
+amount, and puts `ref <r>` into the note for a payment-request link.
 
 The result names the path, the txid and the status:
 
 | Status | Path | Meaning |
 |---|---|---|
 | `completed` | live | The phone checked the payment by SPV and the network holds it. |
-| `sent` | live | The phone checked it and ARC accepted it, but the network had not answered within `timeouts.networkMs` (default 60 s). Do not pay again; watch the txid. |
+| `sent` | live | The phone checked it and Arcade accepted it, but the network had not answered within `timeouts.networkMs` (default 60 s). Do not pay again; watch the txid. |
 | `handed-off` | offline | The sealed payment is in the payee's mailbox. The phone broadcasts it when it collects it. Not collected by `result.reclaimAt` (3 days on), it is reclaimed ([below](#an-offline-payment-the-payee-never-collects)). |
 | `delivered` | peerpay | Your wallet broadcast it and the token is in the payee's message box. |
 
@@ -256,7 +257,7 @@ import { payOffline, payViaPeerPay } from '@spiffyvault/payments'
 <!-- example: examples/parts.ts#perpath -->
 ```ts
 // identityKey: the Ed25519 private key of ricochet's libp2p node
-const offline = await payOffline({ payeePeerId, amountSats: 1000, note: 'Coffee', network: 'testnet' }, { wallet, ricochet, identityKey })
+const offline = await payOffline({ payeePeerId, amountSats: 1000, note: 'Coffee', network: 'mainnet' }, { wallet, ricochet, identityKey })
 const peerpay = await payViaPeerPay({ paymentKey, amountSats: 1000, note: 'Coffee' }, {
   wallet,
   host: 'https://messagebox.bsvblockchain.tech', // the default; set your own here
@@ -357,7 +358,7 @@ const funder: Funder = async (outputs, info) => {
 <!-- /example -->
 
 The library checks that the funded transaction pays every output it asked
-for. It does not check the fee: the payee's ARC refuses a fee that is too
+for. It does not check the fee: the payee's Arcade refuses a fee that is too
 low, after the payment was handed over. The app pays 100 satoshis per
 kilobyte (`SatoshisPerKilobyte(100)` in `@bsv/sdk`).
 
@@ -389,7 +390,7 @@ https://shop.spiffyvault.net/pay-from-browser/ needed:
   missing.
 - **Include every unproven ancestor.** Each input must chain back, inside
   the BEEF, to a transaction with a merkle proof: the payee checks by SPV
-  and ARC needs the parents.
+  and Arcade needs the parents.
 
 ## Errors
 
@@ -458,15 +459,15 @@ import type { LiveInvoiceRequest, LivePayeeOptions, ReceivedLivePayment } from '
 const { node, privateKey } = await createPaymentNode({ payee: true, ...(relay !== undefined ? { relay } : {}) })
 await waitUntilReachable(node)
 const payee = await acceptLivePayments(node, {
-  network: 'testnet',
+  network: 'mainnet',
   screen: r => refuse(r), // the payer sets the amount: refuse what does not match an open order
   invoiceAddress: r => addressFor(r.invoiceId), // a new address per invoice, one you can spend
   onPayment: p => { keep(p) }, // checked by SPV and seen on the network: keep the coin, then check the order
   onEvent: e => { console.log(`payee: ${e.kind}`) }, // 'keep-failed' and 'unsettled' carry a payment to keep or watch
-  ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and ARC
+  ...checks // the tests use a stand-in chain and broadcaster; the defaults are WhatsOnChain and Arcade
 })
 // The app pays this link live, and refuses it if anyone changes it.
-const link = formatPaymentLink(await signPaymentLink({ network: 'testnet', peerId: node.peerId.toString(), amountSats: 2500 }, privateKey))
+const link = formatPaymentLink(await signPaymentLink({ network: 'mainnet', peerId: node.peerId.toString(), amountSats: 2500 }, privateKey))
 ```
 <!-- /example -->
 
@@ -522,13 +523,13 @@ What `acceptLivePayments` does, as the app's payee does:
   It reads the BEEF V1, checks that the outputs to the invoice's address pay
   at least the amount, and checks the transaction by SPV (`chainTracker`).
 - Broadcasts the unproven ancestors, then the payment (`broadcaster`,
-  default `arcBroadcaster`: ARC).
+  default `arcBroadcaster`: Arcade).
 - When the network already has the payment (`SEEN_ON_NETWORK` or
   better), calls `onPayment`, then tells the payer it is done.
-- When ARC took the payment but the network has not shown it yet
+- When Arcade took the payment but the network has not shown it yet
   (`RECEIVED`, for one), tells the payer so at once (`final: false`, event
   `on-the-way`), then waits for the network, as the app's payee does.
-  `arcBroadcaster` asks ARC every second for up to 30 s (`followMs`). Once
+  `arcBroadcaster` asks Arcade every second for up to 30 s (`followMs`). Once
   the network has the payment, `onPayment` runs and the payer is told on
   the same stream (`payment_network`). Nothing is received before then.
   If the network refuses it, nothing is kept (`not-broadcast`) and the
@@ -577,7 +578,7 @@ import { acceptPeerPayPayments } from '@spiffyvault/payments'
 <!-- example: examples/peerpay-payee.ts#peerpay-payee -->
 ```ts
 const payee = await acceptPeerPayPayments({
-  network: 'testnet',
+  network: 'mainnet',
   wallet, // its identity key is the payment key payers pay; it signs in to the message box
   onPayment: async p => {
     // On the network now. Take it in; if this throws, the message stays and is offered again.
@@ -648,7 +649,7 @@ import { acceptOfflinePayments } from '@spiffyvault/payments'
 <!-- example: examples/offline-payee.ts#offline-payee -->
 ```ts
 const payee = await acceptOfflinePayments({
-  network: 'testnet',
+  network: 'mainnet',
   ricochet, // a RicochetClient on the node that takes live payments, so payers find one peer ID
   identityKey: privateKey, // that node's key: it signs the bundle, the one-time keys and the anchor record
   wallet, // the payments go to this BRC-100 wallet; its identity key is the anchor
@@ -709,7 +710,7 @@ import type { PaymentRequest, RequestStatus } from '@spiffyvault/payments'
 ```ts
 // The payee's links for this order: live, signed with its peer key, and PeerPay.
 const request = await createPaymentRequest(
-  { network: 'testnet', peerId: payee.peerId, paymentKey: payee.paymentKey, signer: payee.privateKey, domain: 'shop.example' },
+  { network: 'mainnet', peerId: payee.peerId, paymentKey: payee.paymentKey, signer: payee.privateKey, domain: 'shop.example' },
   { id: order.id, amountSats: order.totalSats, memo: `Order ${order.id}` }
 )
 // Keep request.ref with the order: the payer's note carries it ("ref K7Q2M9XD"),
@@ -936,7 +937,7 @@ did.
 | The broadcaster | The BSV Association's Arcade on both networks (`DEFAULT_ARC`) | The payee: putting a checked payment on the network, and following it there | Lose a payment, or say the network has seen it when it has not. Only a block proves the network took it | `not-broadcast`; or `unsettled` when it took the payment and then went quiet: watch the txid before handing over goods ([Being paid](#being-paid)) | `broadcaster`, or `arcBroadcaster(network, { url, apiKey })` |
 | BSVA's message box | `https://messagebox.bsvblockchain.tech` (`DEFAULT_MESSAGE_BOX_HOST`), the one the app reads | PeerPay: carrying the payment token to the payee | See who pays whom. Drop the token, so the payee never learns of the payment | Your wallet broadcasts before the token is sent, so a payment can be on the network with its token not delivered: `PeerPayUndeliveredError`. Send the token again with `deliverPeerPayToken()`; do not pay again | `peerPay.host`, but the app reads only BSVA's |
 | The payee's website | The link's `d` | The domain check: `https://<d>/.well-known/spiffyvault.json` | Whoever runs the domain can list any payee. The check proves the domain names the payee, not that the payer meant that domain | `pay()` refuses the link with `DomainError` before anything is asked of the payee | `domainFetch` |
-| Your wallet | The one you pass | Funding, broadcasting PeerPay payments, and reclaiming offline payments the payee never collects | Whatever its own services do (the wallet toolbox uses WhatsOnChain and ARC) | No payment can be built | Your choice |
+| Your wallet | The one you pass | Funding, broadcasting PeerPay payments, and reclaiming offline payments the payee never collects | Whatever its own services do (the wallet toolbox uses WhatsOnChain and a broadcaster) | No payment can be built | Your choice |
 
 The app finds a payee only through SpiffyVault's Ricochet server, so
 there is no running your own for payments from the app yet: live and
@@ -1003,34 +1004,46 @@ CI runs all of them on every push, against a pinned go-ricochet commit
 relay that limits its connections, as an operator may set; the others on
 go-ricochet's default relay, which does not.
 
-## A real payment on testnet
+## Testing with small amounts
 
 `tools/e2e-pay.ts` pays a phone's payment link from a
-`@bsv/wallet-toolbox` testnet wallet and prints every step. It uses the
-toolbox's network services (WhatsOnChain, ARC); the library does not. Run
-it from `packages/payments` with Node.js 22 (`npm install` at the
+`@bsv/wallet-toolbox` wallet and prints every step. It uses the
+toolbox's network services (WhatsOnChain, Arcade); the library does not.
+Run it from `packages/payments` with Node.js 22 (`npm install` at the
 repository root first).
 
-1. Pick a key file outside this repository. The tool makes it on first use:
+The tool moves real coins, so it runs on testnet unless you set
+`SPIFFYVAULT_E2E_NETWORK=mainnet`. It pays only links for its own network.
+On mainnet, pay small amounts: a few thousand satoshis is enough. Each
+network needs its own key file: the tool refuses a testnet key file on
+mainnet and a mainnet one on testnet, so test coins and real coins are
+never in one wallet.
+
+1. Pick the network and a key file outside this repository. The tool
+   makes the key file on first use:
 
    ```sh
-   export SPIFFYVAULT_E2E_KEY=~/.spiffyvault-e2e/testnet.key
+   export SPIFFYVAULT_E2E_NETWORK=testnet      # or mainnet
+   export SPIFFYVAULT_E2E_KEY=~/.spiffyvault-e2e/testnet.key   # mainnet.key on mainnet
    node tools/e2e-pay.ts info
    ```
 
-   It prints the wallet's identity key and a funding address.
-2. Send testnet coins (some 20 000 satoshis) to the funding address. Wait
-   for one confirmation, then take the coins into the wallet:
+   It prints the network, the wallet's identity key and a funding address.
+2. Send coins to the funding address: some 20 000 satoshis on testnet, or
+   a small amount on mainnet. Wait for one confirmation, then take the
+   coins into the wallet:
 
    ```sh
    node tools/e2e-pay.ts fund <txid>
    node tools/e2e-pay.ts info      # the balance now shows them
    ```
 
-3. On the phone (a testnet build): Home, **Get paid**, the **My code** tab,
-   **SpiffyVault** under "Who will scan it?", **Ask for an amount**, type
-   an amount (and a note), **Share link**. Send the text to the computer.
-   It looks like `https://spiffyvault.net/pay?n=testnet&p=12D3KooW…&k=02…&a=…`.
+3. On the phone (the store app on mainnet, a testnet build on testnet):
+   Home, **Get paid**, the **My code** tab, **SpiffyVault** under "Who
+   will scan it?", **Ask for an amount**, type an amount (and a note),
+   **Share link**. Send the text to the computer.
+   It looks like `https://spiffyvault.net/pay?n=mainnet&p=12D3KooW…&k=02…&a=…`
+   (`n=testnet` on testnet).
 4. Dry run, with the app open:
 
    ```sh

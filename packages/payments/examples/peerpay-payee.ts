@@ -13,7 +13,7 @@ export async function startPeerPayPayee (wallet: WalletInterface,
   checks: { client: PeerPayInbox, chainTracker: ChainTracker, broadcaster: Broadcaster }): Promise<PeerPayPayee> {
   // #region peerpay-payee
   const payee = await acceptPeerPayPayments({
-    network: 'testnet',
+    network: 'mainnet',
     wallet, // its identity key is the payment key payers pay; it signs in to the message box
     onPayment: async p => {
       // On the network now. Take it in; if this throws, the message stays and is offered again.

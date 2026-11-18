@@ -14,7 +14,7 @@ export async function startOfflinePayee (ricochet: PayeeRicochet, privateKey: Ed
   checks: { chainTracker: ChainTracker, broadcaster: Broadcaster }): Promise<OfflinePayee> {
   // #region offline-payee
   const payee = await acceptOfflinePayments({
-    network: 'testnet',
+    network: 'mainnet',
     ricochet, // a RicochetClient on the node that takes live payments, so payers find one peer ID
     identityKey: privateKey, // that node's key: it signs the bundle, the one-time keys and the anchor record
     wallet, // the payments go to this BRC-100 wallet; its identity key is the anchor

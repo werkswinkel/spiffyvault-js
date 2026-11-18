@@ -50,12 +50,12 @@ test('README Node example: offline when it is not', async () => {
 
 test('README payee example: the Node example pays it live', async () => {
   const kept: ReceivedLivePayment[] = []
-  const t = await till(() => PrivateKey.fromRandom().toPublicKey().toAddress('testnet'), p => { kept.push(p) }, server.udx, {
+  const t = await till(() => PrivateKey.fromRandom().toPublicKey().toAddress('mainnet'), p => { kept.push(p) }, server.udx, {
     chainTracker: { isValidRootForHeight: async () => true, currentHeight: async () => 1_000_000 },
     broadcaster: async () => ({ accepted: true, status: 'SEEN_ON_NETWORK' })
   })
   stops.push(t.stop)
-  assert.equal(await nodePay(t.link, new FakeWallet() as unknown as WalletInterface, { peerId: server.peerId, addr: server.udx }), 'live')
+  assert.equal(await nodePay(t.link, new FakeWallet({ network: 'mainnet' }) as unknown as WalletInterface, { peerId: server.peerId, addr: server.udx }), 'live')
   assert.equal(kept.length, 1)
   assert.equal(kept[0]!.paidSats, 2500)
 })

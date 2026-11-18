@@ -28,7 +28,7 @@ export async function paymentFor (order: Order, payee: Payee): Promise<PaymentRe
   // #region widget-server
   // The payee's links for this order: live, signed with its peer key, and PeerPay.
   const request = await createPaymentRequest(
-    { network: 'testnet', peerId: payee.peerId, paymentKey: payee.paymentKey, signer: payee.privateKey, domain: 'shop.example' },
+    { network: 'mainnet', peerId: payee.peerId, paymentKey: payee.paymentKey, signer: payee.privateKey, domain: 'shop.example' },
     { id: order.id, amountSats: order.totalSats, memo: `Order ${order.id}` }
   )
   // Keep request.ref with the order: the payer's note carries it ("ref K7Q2M9XD"),

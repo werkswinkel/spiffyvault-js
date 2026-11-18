@@ -27,9 +27,9 @@ before you disclose it.
 
 The SpiffyVault apps themselves are reported the same way.
 
-Testnet only for now. The cryptography had an outside review in October
-2026, and the fixes from it are not yet re-checked by the reviewer, so do
-not use the SDK for mainnet funds yet.
+The SDK is used on mainnet, as the SpiffyVault apps are. The cryptography
+had an outside review in October 2026; the fixes from it are not yet
+re-checked by the reviewer. Use testnet while you build and test.
 
 Some checks are yours, not the library's: matching each payment to its
 order (the payer's app sets the amount), keeping payments durably, and

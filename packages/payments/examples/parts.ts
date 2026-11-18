@@ -73,7 +73,7 @@ export async function signedLink (peerKey: PeerKeySigner, peerId: string): Promi
 export async function perPath (wallet: WalletInterface, ricochet: RicochetLike, identityKey: Uint8Array, payeePeerId: string, paymentKey: string, client?: MessageBoxSender): Promise<string[]> {
   // #region perpath
   // identityKey: the Ed25519 private key of ricochet's libp2p node
-  const offline = await payOffline({ payeePeerId, amountSats: 1000, note: 'Coffee', network: 'testnet' }, { wallet, ricochet, identityKey })
+  const offline = await payOffline({ payeePeerId, amountSats: 1000, note: 'Coffee', network: 'mainnet' }, { wallet, ricochet, identityKey })
   const peerpay = await payViaPeerPay({ paymentKey, amountSats: 1000, note: 'Coffee' }, {
     wallet,
     host: 'https://messagebox.bsvblockchain.tech', // the default; set your own here

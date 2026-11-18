@@ -1,8 +1,13 @@
 /**
- * End-to-end tool: pay a real SpiffyVault payment link on testnet from a
- * @bsv/wallet-toolbox wallet, printing every step. Testnet only.
+ * End-to-end tool: pay a real SpiffyVault payment link from a
+ * @bsv/wallet-toolbox wallet, printing every step.
  *
  *   SPIFFYVAULT_E2E_KEY=~/.spiffyvault-e2e/testnet.key node tools/e2e-pay.ts <command>
+ *   SPIFFYVAULT_E2E_NETWORK=mainnet SPIFFYVAULT_E2E_KEY=~/.spiffyvault-e2e/mainnet.key node tools/e2e-pay.ts <command>
+ *
+ * SPIFFYVAULT_E2E_NETWORK is testnet (the default) or mainnet. The tool
+ * moves real coins, so it runs on testnet unless you ask for mainnet. It
+ * pays only links for its own network.
  *
  * Commands:
  *   info                       identity key, funding address, balance
@@ -20,10 +25,13 @@
  *   abort <txid>               release the inputs of a payment the payee did NOT take (live/offline, not broadcast)
  *   monitor [minutes]          run the wallet's monitor (default 10 min): it reclaims offline payments past their deadline
  *
- * The key file holds a 64-hex root private key. It is made (mode 0600) when
- * missing, and must be outside this repository. The wallet database is
- * <key file>.sqlite next to it. This tool uses the wallet-toolbox's network
- * services (WhatsOnChain, ARC); the payments package itself uses none.
+ * The key file holds a 64-hex root private key, with `mainnet:` in front
+ * for a mainnet key. It is made (mode 0600) when missing, and must be
+ * outside this repository. A testnet key file is refused on mainnet and a
+ * mainnet one on testnet, so test coins and real coins are never in one
+ * wallet. The wallet database is <key file>.sqlite next to it. This tool
+ * uses the wallet-toolbox's network services (WhatsOnChain, Arcade); the
+ * payments package itself uses none.
  */
 
 import { createRequire } from 'node:module'
@@ -49,9 +57,21 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 function say (line: string): void { console.log(line) }
 function fail (line: string): never { console.error(`error: ${line}`); process.exit(1) }
 
+type E2eNetwork = 'mainnet' | 'testnet'
+
+function e2eNetwork (): E2eNetwork {
+  const raw = (process.env.SPIFFYVAULT_E2E_NETWORK ?? '').trim()
+  if (raw === '' || raw === 'testnet') return 'testnet'
+  if (raw === 'mainnet') return 'mainnet'
+  fail(`SPIFFYVAULT_E2E_NETWORK must be testnet (the default) or mainnet, not ${JSON.stringify(raw)}`)
+}
+
+const network = e2eNetwork()
+const chain = network === 'mainnet' ? 'main' : 'test'
+
 function keyFile (): string {
   const raw = process.env.SPIFFYVAULT_E2E_KEY
-  if (raw === undefined || raw === '') fail('set SPIFFYVAULT_E2E_KEY to a key file path outside this repository, e.g. ~/.spiffyvault-e2e/testnet.key')
+  if (raw === undefined || raw === '') fail(`set SPIFFYVAULT_E2E_KEY to a key file path outside this repository, e.g. ~/.spiffyvault-e2e/${network}.key`)
   const path = resolve(raw.replace(/^~(?=\/)/, process.env.HOME ?? '~'))
   if (path.startsWith(repoRoot + '/')) fail(`the key file must be outside the repository (${repoRoot})`)
   return path
@@ -60,12 +80,16 @@ function keyFile (): string {
 function loadRootKey (path: string): PrivateKey {
   if (!existsSync(path)) {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-    writeFileSync(path, PrivateKey.fromRandom().toHex() + '\n', { mode: 0o600 })
+    writeFileSync(path, (network === 'mainnet' ? 'mainnet:' : '') + PrivateKey.fromRandom().toHex() + '\n', { mode: 0o600 })
     chmodSync(path, 0o600)
-    say(`made a new testnet root key in ${path} (keep it; fund the address below)`)
+    say(`made a new ${network} root key in ${path} (keep it; fund the address below)`)
   }
-  const hex = readFileSync(path, 'utf8').trim()
+  const text = readFileSync(path, 'utf8').trim()
+  const mainnetKey = text.startsWith('mainnet:')
+  const hex = mainnetKey ? text.slice('mainnet:'.length) : text
   if (!/^[0-9a-f]{64}$/i.test(hex)) fail(`${path} does not hold a 64-hex private key`)
+  if (mainnetKey && network !== 'mainnet') fail(`${path} is a mainnet key; set SPIFFYVAULT_E2E_NETWORK=mainnet, or use another key file for testnet`)
+  if (!mainnetKey && network === 'mainnet') fail(`${path} is a testnet key; use another key file for mainnet, so test and real coins are never mixed`)
   return PrivateKey.fromHex(hex)
 }
 
@@ -73,18 +97,21 @@ function loadRootKey (path: string): PrivateKey {
 function fundingKey (root: PrivateKey): PrivateKey { return root.deriveChild(root.toPublicKey(), 'spiffyvault-e2e funding') }
 
 // Broadcast through BSVA's Arcade first, as the payee does (DEFAULT_ARC):
-// the toolbox's testnet default is TAAL's ARC, which wants an API key
-// (401 without one). Setup has no option for it, so set it where Setup
-// reads its defaults.
-const ARCADE_TESTNET = 'https://arcade-v2-testnet-us-1.bsvblockchain.tech'
+// the toolbox's default is TAAL's ARC, which wants an API key (401
+// without one). Setup has no option for it, so set it where Setup reads
+// its defaults.
+const ARCADE: Record<string, string> = {
+  main: 'https://arcade-v2-us-1.bsvblockchain.tech',
+  test: 'https://arcade-v2-testnet-us-1.bsvblockchain.tech'
+}
 const defaultServiceOptions = Services.createDefaultOptions.bind(Services)
-Services.createDefaultOptions = chain => ({ ...defaultServiceOptions(chain), ...(chain === 'test' ? { arcadeUrl: ARCADE_TESTNET } : {}) })
+Services.createDefaultOptions = c => ({ ...defaultServiceOptions(c), ...(ARCADE[c] !== undefined ? { arcadeUrl: ARCADE[c] } : {}) })
 
 async function openWallet (path: string) {
   const root = loadRootKey(path)
   const identityKey = root.toPublicKey().toString()
   const setup = await Setup.createWalletSQLite({
-    env: { chain: 'test', identityKey, identityKey2: identityKey, filePath: `${path}.sqlite`, taalApiKey: '', devKeys: { [identityKey]: root.toHex() }, mySQLConnection: '' },
+    env: { chain, identityKey, identityKey2: identityKey, filePath: `${path}.sqlite`, taalApiKey: '', devKeys: { [identityKey]: root.toHex() }, mySQLConnection: '' },
     rootKeyHex: root.toHex(),
     filePath: `${path}.sqlite`,
     databaseName: 'spiffyvault_e2e'
@@ -112,9 +139,9 @@ const progress = (p: PaymentProgress): void => say(`  [${p.path}] ${p.step}${p.d
 async function cmdInfo (path: string): Promise<void> {
   const { root, setup } = await openWallet(path)
   const fk = fundingKey(root)
-  say(`network:        testnet`)
+  say(`network:        ${network}`)
   say(`identity key:   ${root.toPublicKey().toString()}   (BRC-100 identity; the PeerPay sender)`)
-  say(`funding address: ${fk.toPublicKey().toAddress('testnet')}   (send testnet coins here, then: fund <txid>)`)
+  say(`funding address: ${fk.toPublicKey().toAddress(network)}   (send ${network} coins here, then: fund <txid>)`)
   say(`balance:        ${await setup.wallet.balance()} sats spendable in the wallet`)
   await close(setup)
 }
@@ -123,7 +150,7 @@ async function cmdFund (path: string, arg: string | undefined): Promise<void> {
   if (arg === undefined || !/^[0-9a-f]{64}(:\d+)?$/i.test(arg)) fail('fund <txid>[:<vout>]')
   const { root, setup } = await openWallet(path)
   const fk = fundingKey(root)
-  const address = fk.toPublicKey().toAddress('testnet')
+  const address = fk.toPublicKey().toAddress(network)
   const [txid, voutText] = arg.toLowerCase().split(':') as [string, string | undefined]
   say(`fetching ${txid} and its proof (wallet-toolbox services)…`)
   const beef = await setup.services.getBeefForTxid(txid)
@@ -163,10 +190,10 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
   say('1. reading the link')
   const plan: PayPlan = await planPayment({
     link, ...(typeof o.amount === 'string' ? { amountSats: Number(o.amount) } : {}), ...(typeof o.note === 'string' ? { note: o.note } : {})
-  }, { wallet, network: 'testnet' }).catch((e: unknown) => fail(isPaymentError(e) ? `${e.code}: ${e.message}` : String(e)))
+  }, { wallet, network }).catch((e: unknown) => fail(isPaymentError(e) ? `${e.code}: ${e.message}` : String(e)))
   say(`   network ${plan.network}; amount ${plan.amountSats} sats; peer ${plan.peerId ?? '(none)'}; key ${plan.paymentKey ?? '(none)'}`)
   say(`   note: ${plan.note ?? '(none)'}; payee wallet: ${plan.walletId ?? '(active)'}; request ref: ${plan.requestRef ?? '(none)'}`)
-  if (plan.network !== 'testnet') fail('this tool pays testnet links only')
+  if (plan.network !== network) fail(`this is a ${plan.network} link and the tool runs on ${network} (SPIFFYVAULT_E2E_NETWORK)`)
 
   // A stable payer peer ID, from the key file.
   const seed = Hash.sha256([...setup.rootKey.toArray(), ...Utils.toArray('spiffyvault-e2e libp2p', 'utf8')])
@@ -210,7 +237,7 @@ async function cmdPay (path: string, link: string | undefined, o: Record<string,
     else if (mode === 'offline') r = await payOffline({ payeePeerId: plan.peerId ?? fail('the link has no peer ID'), ...common }, { ...ctx, ricochet, identityKey })
     else if (mode === 'peerpay') r = await payViaPeerPay({ paymentKey: plan.paymentKey ?? fail('the link has no payment key'), amountSats: plan.amountSats, ...(plan.note !== undefined ? { note: plan.note } : {}) }, { ...ctx, ...(host !== undefined ? { host } : {}) })
     else r = await pay({ link, ...(typeof o.amount === 'string' ? { amountSats: Number(o.amount) } : {}), ...(typeof o.note === 'string' ? { note: o.note } : {}) },
-      { ...ctx, network: 'testnet', libp2p: node, relays, ricochet, identityKey, peerPay: { ...(host !== undefined ? { host } : {}), fallback: o['peerpay-fallback'] === true } })
+      { ...ctx, network, libp2p: node, relays, ricochet, identityKey, peerPay: { ...(host !== undefined ? { host } : {}), fallback: o['peerpay-fallback'] === true } })
     say(`3. done: ${r.status} by ${r.path}; txid ${r.txid}`)
     for (const a of r.attempts) say(`   earlier attempt: ${a.path ?? '?'} ${a.code}: ${a.message}`)
     if (r.path === 'live') say(`   the phone checked it by SPV${r.broadcasted === true ? ' and is broadcasting it' : ' (the network already holds it)'}`)
